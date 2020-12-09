@@ -1,6 +1,9 @@
+
+__author__ = ['Michael Drews']
+
+import numpy as np
 from torch import nn
 import torch
-
 
 
 class Unet(nn.Module):
@@ -46,14 +49,13 @@ class Unet(nn.Module):
             ch_in = self.start_channels * (2**n)
             
             trans = nn.ConvTranspose2d(ch_in, ch_out, kernel_size=2, stride=2)
-            conv = self.dual_conv(ch_in, ch_out)                 
+            conv = self.dual_conv(ch_in, ch_out)
             self.up_path_trans.append(trans)
             self.up_path_conv.append(conv)   
             
         # create output layer
-        self.out = nn.Conv2d(64, 1, kernel_size=1)
-            
-       
+        self.out = nn.Conv2d(ch_in, 1, kernel_size=1)
+
     @staticmethod
     def dual_conv(in_channel, out_channel):
         """
@@ -62,12 +64,14 @@ class Unet(nn.Module):
         conv = nn.Sequential(
             nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
+            nn.BatchNorm2d(out_channel),
+
             nn.Conv2d(out_channel, out_channel, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(out_channel)
         )
         return conv
-    
-    
+
     def forward(self, x):
         "Forward pass through the network"
         
@@ -79,9 +83,7 @@ class Unet(nn.Module):
             if n < self.depth-1:
                 self.feature_maps.append(x)
                 x = self.maxpool(x)
-            
-        print(f'Generated feature maps: {len(self.feature_maps)}')
-              
+
         # pass through upsample path
         for n in range(self.depth-1):
             trans = self.up_path_trans[n]
@@ -95,3 +97,15 @@ class Unet(nn.Module):
         x = self.out(x)
         
         return x
+
+    def count_trainable_parameters(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        return params
+
+    def get_gradients(self):
+        gradients = dict()
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                gradients[name] = param.grad.numpy()
+
