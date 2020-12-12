@@ -4,108 +4,89 @@ __author__ = ['Michael Drews']
 import numpy as np
 from torch import nn
 import torch
+import numbers
 
 
-class Unet(nn.Module):
+class VGG(nn.Module):
     """
-    My UNet implementation
+    My parametrized VGG-like implementation
     """
-    
-    def __init__(self, depth=5, start_channels=64, batchnorm=True):
+    __default_cnn__ = [64, 64, 'M', 64, 'M']
+    __default_head__ = []
+
+    def __init__(self, cnn_cfgs=__default_cnn__, head_cfgs=__default_head__, output_units=256,
+                 avg_pool_size=7, batchnorm=True):
         """
         Creates the network.
         
         Args:
-            depth: number of dual convolutional layers
-            start_channels: number of output channels in first layer
+            cnn_cfgs (List): layer configuration for the ConvNet
+            head_cfgs (List): layer configuration for the output head
+            output_units: number of output units
+            avg_pool_size: square lenght of the AvgPool layer
+            batchnorm: include BatchNorm layers or not
         """
         
-        super(Unet, self).__init__()
-        self.depth = depth
-        self.start_channels = start_channels
+        super(VGG, self).__init__()
+        self.cnn_cfgs = cnn_cfgs
+        self.head_cfgs = head_cfgs
         self.batchnorm = batchnorm
-        
-        # create downsample path
-        self.down_path = nn.ModuleList()
-        for n in range(self.depth):
-            if n == 0:
-                ch_in = 1
-            else:
-                ch_in  = self.start_channels * (2**(n-1))
-            ch_out = self.start_channels * (2**n)
-            
-            self.down_path.append(self.dual_conv(ch_in, ch_out, batchnorm=self.batchnorm))
-        
-        # create maxpool operation
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-            
-        # create upsample path
-        self.up_path_trans = nn.ModuleList()
-        self.up_path_conv = nn.ModuleList()
-        for n in range(self.depth)[::-1]:
-            if n == 0:
-                ch_out = 1
-            else:
-                ch_out  = self.start_channels * (2**(n-1))
-            ch_in = self.start_channels * (2**n)
-            
-            trans = nn.ConvTranspose2d(ch_in, ch_out, kernel_size=2, stride=2)
-            conv = self.dual_conv(ch_in, ch_out, batchnorm=self.batchnorm)
-            self.up_path_trans.append(trans)
-            self.up_path_conv.append(conv)   
-            
-        # create output layer
-        self.out = nn.Conv2d(ch_in, 1, kernel_size=1)
+        self.output_units = int(output_units)
 
-    @staticmethod
-    def dual_conv(in_channel, out_channel, batchnorm=True):
-        """
-        Returns a dual convolutional layer with ReLU activations in between. 
-        """
-        if batchnorm:
-            conv = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.BatchNorm2d(out_channel),
+        self.conv_net, conv_output_channels = self._make_conv_layers(self.cnn_cfgs, batchnorm=self.batchnorm)
+        self.avgpool = nn.AdaptiveAvgPool2d((avg_pool_size, avg_pool_size))
+        self.flatten = nn.Flatten()
 
-                nn.Conv2d(out_channel, out_channel, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.BatchNorm2d(out_channel)
-            )
-        else:
-            conv = nn.Sequential(
-                nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
+        h_cfgs = self.head_cfgs + [self.output_units]
+        head_input_channels = (avg_pool_size**2)*conv_output_channels
+        self.head = self._make_head(h_cfgs, head_input_channels, batchnorm=self.batchnorm)
 
-                nn.Conv2d(out_channel, out_channel, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-            )
-        return conv
+    def _make_conv_layers(self, cnn_cfgs, batchnorm=True):
+
+        modules = nn.ModuleList()
+        for i, c in enumerate(cnn_cfgs):
+
+            if isinstance(c, numbers.Number):
+                if i==0:
+                    in_channel = 1
+                out_channel = int(c)
+                modules.append(nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1))
+                modules.append(nn.ReLU(inplace=True))
+                if batchnorm:
+                    modules.append(nn.BatchNorm2d(out_channel))
+                in_channel = out_channel
+
+            elif isinstance(c, str):
+                modules.append(nn.MaxPool2d(kernel_size=2, stride=2))
+
+        conv_net = nn.Sequential(*modules)
+        return conv_net, out_channel
+
+    def _make_head(self, head_cfgs, input_channels, batchnorm=True):
+
+        n = len(head_cfgs)
+        modules = nn.ModuleList()
+        for i, c in enumerate(head_cfgs):
+            if i==0:
+                in_channel = input_channels
+            out_channel = int(c)
+            modules.append(nn.Linear(in_channel, out_channel))
+            if i < n-1:
+                modules.append(nn.ReLU(inplace=True))
+                if batchnorm:
+                    modules.append(nn.BatchNorm1d(out_channel))
+
+            in_channel = out_channel
+
+        head = nn.Sequential(*modules)
+        return head
 
     def forward(self, x):
         "Forward pass through the network"
-        
-        # pass through downsample path
-        self.feature_maps = []
-        for n in range(self.depth):
-            down_conv = self.down_path[n]
-            x = down_conv(x)
-            if n < self.depth-1:
-                self.feature_maps.append(x)
-                x = self.maxpool(x)
-
-        # pass through upsample path
-        for n in range(self.depth-1):
-            trans = self.up_path_trans[n]
-            conv = self.up_path_conv[n]
-            
-            x = trans(x)
-            y = self.feature_maps[-(n+1)]
-            x = conv(torch.cat([x,y], 1))
-            
-        # pass through output layer
-        x = self.out(x)
-        
+        x = self.conv_net(x)
+        x = self.avgpool(x)
+        x = self.flatten(x)
+        x = self.head(x)
         return x
 
     def count_trainable_parameters(self):
