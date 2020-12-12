@@ -62,6 +62,9 @@ class Epoch:
                 metrics_logs = {k: v.mean for k, v in metrics_meters.items()}
                 logs.update(metrics_logs)
 
+                # update grad logs
+                # grads = self.model.get_gradients()
+
                 if self.verbose:
                     s = self._format_logs(logs)
                     iterator.set_postfix_str(s)
@@ -116,4 +119,10 @@ class ValidEpoch(Epoch):
         return loss, prediction
     
     
-    
+#class History():
+#
+#    def __init__(self):
+#        pass#
+#
+#    def _loss_update(self):
+

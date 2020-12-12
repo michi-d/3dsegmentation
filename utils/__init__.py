@@ -1,10 +1,9 @@
-import unittest
 
+from . import train
+from . import losses
+from . import metrics
+from . import functional
+from . import base
+from . import meter
+from . import data
 
-class MyTestCase(unittest.TestCase):
-    def test_something(self):
-        self.assertEqual(True, False)
-
-
-if __name__ == '__main__':
-    unittest.main()

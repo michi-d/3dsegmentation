@@ -134,7 +134,7 @@ class RegressionFake2DDataset(Fake2DDataset):
         coords[int(n_points):, 1] = y0
 
         # scale coordinates to -1...1
-        n = X.shape[0]
+        n = X.shape[-1]
         coords = (coords-n/2) / n
 
         y = Tensor(coords[np.newaxis, :, :])

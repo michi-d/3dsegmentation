@@ -23,7 +23,7 @@ class VGG(nn.Module):
             cnn_cfgs (List): layer configuration for the ConvNet
             head_cfgs (List): layer configuration for the output head
             output_units: number of output units
-            avg_pool_size: square lenght of the AvgPool layer
+            avg_pool_size: square length of the AvgPool layer
             batchnorm: include BatchNorm layers or not
         """
         
