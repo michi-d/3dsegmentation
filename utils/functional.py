@@ -127,3 +127,25 @@ def recall(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     score = (tp + eps) / (tp + fn + eps)
 
     return score
+
+
+def min_euclidean(y_pr, y_gt):
+    """Sum over euclidean distances between each grid point and closes predicted points
+    Args:
+     y_pr (torch.Tensor): predicted tensor
+     y_gt (torch.Tensor):  ground truth tensor
+    Returns:
+     float: euclidean loss
+    """
+    # reshape to get spatial dimensions
+    y_gt = y_gt.reshape((y_gt.shape[0], -1, 2))
+    y_pr = y_pr.reshape((y_pr.shape[0], -1, 2))
+
+    # get all distances from all ground truth to all predicted points
+    dist = torch.norm(torch.unsqueeze(y_gt, 2) - torch.unsqueeze(y_pr, 1), p=2, dim=3)
+
+    # get minimal distance for each ground truth point (reduce over the dimension for the predicted points)
+    dist, _ = dist.min(dim=2)
+
+    loss = dist.mean()
+    return dist.mean()

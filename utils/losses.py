@@ -46,6 +46,17 @@ class DiceLoss(base.Loss):
         )
 
 
+class MinEuclideanLoss(base.Loss):
+
+    def __init__(self, activation=None, ignore_channels=None, **kwargs):
+        super().__init__(**kwargs)
+        self.activation = Activation(activation)
+        self.ignore_channels = ignore_channels
+
+    def forward(self, y_pr, y_gt):
+        return F.min_euclidean(y_pr, y_gt)
+
+
 class L1Loss(nn.L1Loss, base.Loss):
     pass
 
