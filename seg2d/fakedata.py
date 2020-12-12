@@ -2,27 +2,13 @@
 Modulate for creation of fake data in 2D.
 """
 
+__author__ = ['Michael Drews']
+
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-import time
 from scipy.linalg import norm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-
-def clean_mask_out_of_bounds(A, bound=128):
-    """Deletes all points with any coordinate larger than a bound.
-    
-    Args:
-        A: input array
-        bound: bound
-    
-    Returns:
-        mask: boolean mask for points within the bounds
-    """
-    mask_low = ~(A<0).any(axis=1)
-    mask_high = ~(A>=bound).any(axis=1)
-    return mask_low & mask_high
 
 
 class Point():    
@@ -39,7 +25,7 @@ class Dendrite():
     """
     
     def __init__(self, x0, y0, intensity, n_points, std_x, std_y, std_v, 
-                 ring_d, ring_std, mode='ring'):
+                 ring_d, ring_std, render_size, mode='ring'):
         """Generator method.
         
         Args:
@@ -52,6 +38,7 @@ class Dendrite():
             std_v: standard deviation of the intensity
             ring_d: distance ring (for "ring" mode)
             ring_std: standard deviation in distance from ring (for "ring" mode)
+            render_size: size of rendering window
             mode: "ring" or "gaussian"
         """
         
@@ -68,7 +55,22 @@ class Dendrite():
         self.n_points = n_points
         self.ring_d = ring_d
         self.ring_std = ring_std
+        self.render_size = render_size
         self.mode = mode
+
+    def clean_mask_out_of_bounds(self, A):
+        """Deletes all points with any coordinate larger than a bound.
+
+        Args:
+            A: input array
+
+        Returns:
+            mask: boolean mask for points within the bounds
+        """
+        bound = self.render_size[0]
+        mask_low = ~(A < 0).any(axis=1)
+        mask_high = ~(A >= bound).any(axis=1)
+        return mask_low & mask_high
         
     def grow(self):
         """Generate point cloud around the center point
@@ -91,7 +93,7 @@ class Dendrite():
         v = np.random.normal(loc=self.intensity, scale=std_v, size=n_points)
         
         xy = np.stack([x, y], axis=1)
-        clean_mask = clean_mask_out_of_bounds(xy)
+        clean_mask = self.clean_mask_out_of_bounds(xy)
         xy = xy[clean_mask, :]
         v  = v[clean_mask]
         
@@ -107,10 +109,9 @@ class RandomImage():
                  std_x=2, std_y=2, std_v=5, dendrite_kernel=(2,2), gaussian_kernel=(5,5),
                  ring_d=3.5, ring_std=0.1, ring_frac=0.5, randomCutOff=True, randomRotation=True,
                  randomAngles = (-10, 30), randomFraction=True,
-                 randomScaling = (0.9, 1.5), size=(128,128)):
-        """Generator method
-        
-        """
+                 randomScaling = (1.28*0.9, 1.28*1.5), size=(128,128)):
+
+        assert size[0] == size[1]
     
         self.radius_ground_truth = 3.5
         
@@ -153,14 +154,26 @@ class RandomImage():
         
         # generate picture
         self._generate()
-    
-    
+
+    def clean_mask_out_of_bounds(self, A):
+        """Deletes all points with any coordinate larger than a bound.
+
+        Args:
+            A: input array
+
+        Returns:
+            mask: boolean mask for points within the bounds
+        """
+        bound = self.size[0]
+        mask_low = ~(A < 0).any(axis=1)
+        mask_high = ~(A >= bound).any(axis=1)
+        return mask_low & mask_high
+
     @staticmethod
     def _next_uneven_number(i):
         """Finds next lower uneven number
         """
         return int(np.ceil(i/2)*2-1)
-
 
     def _cut_off_points_randomly(self, points):
         """Cut off all points above a random line.
@@ -182,7 +195,6 @@ class RandomImage():
         
         return points[mask]
     
-    
     def _rotate_points_randomly(self, points):
         """Rotate all points randomly
         """
@@ -192,7 +204,6 @@ class RandomImage():
                       [np.sin(rot_angle), np.cos(rot_angle)]])
         points = (np.dot(points-e_0, M) + e_0).astype(np.int)
         return points
-        
         
     def _generate(self):
         """Generates the image
@@ -223,7 +234,7 @@ class RandomImage():
             midpoints = self._rotate_points_randomly(midpoints)
             
         # clean out-of-bounds points
-        midpoints = midpoints[clean_mask_out_of_bounds(midpoints)]
+        midpoints = midpoints[self.clean_mask_out_of_bounds(midpoints)]
 
         # generate random ring fraction
         if self.randomFraction:
@@ -240,7 +251,7 @@ class RandomImage():
                 mode = 'gaussian'
                 
             d = Dendrite(point[0], point[1], intensity, self.n_points, self.std_x, self.std_y, self.std_v, 
-                         self.ring_d, self.ring_std, mode)
+                         self.ring_d, self.ring_std, self.size, mode)
             d.grow()
             dendrites.append(d)
 
@@ -276,7 +287,6 @@ class RandomImage():
         self.labels = self._generate_ground_truth(midpoints)
         self.midpoints = midpoints
         
-        
     def _generate_ground_truth(self, midpoints):
         """Generates binary labels.
         """
@@ -290,8 +300,7 @@ class RandomImage():
         mask = np.any(distances<self.radius_ground_truth, axis=1)
         mask = np.reshape(mask, self.size)
         return mask.astype(np.int)
-    
-    
+
     def show_data_plus_labels(self, figsize=(15,10), red_crosses=False):
         """Show image and labels in matplotlib figure.
         """
@@ -317,8 +326,7 @@ class RandomImage():
             ax.scatter(y=self.midpoints[:,0], x=self.midpoints[:,1], s=25, marker='x', color='r')
         
         return fig
-    
-    
+
     def get_parameters(self):
         """Get generative parameters.
         """
@@ -341,4 +349,3 @@ class RandomImage():
                   'scaling_factor': self.scaling_factor}
         
         return params
-         
