@@ -11,7 +11,7 @@ class Unet(nn.Module):
     My UNet implementation
     """
     
-    def __init__(self, depth=5, start_channels=64, batchnorm=True):
+    def __init__(self, depth=5, input_channels=1, start_channels=64, batchnorm=True):
         """
         Creates the network.
         
@@ -24,6 +24,7 @@ class Unet(nn.Module):
         self.depth = depth
         self.start_channels = start_channels
         self.batchnorm = batchnorm
+        self.input_channels = input_channels
 
         # generate network
         self._make_layers()
@@ -34,7 +35,7 @@ class Unet(nn.Module):
         self.down_path = nn.ModuleList()
         for n in range(self.depth):
             if n == 0:
-                ch_in = 1
+                ch_in = self.input_channels
             else:
                 ch_in  = self.start_channels * (2**(n-1))
             ch_out = self.start_channels * (2**n)
@@ -49,7 +50,7 @@ class Unet(nn.Module):
         self.up_path_conv = nn.ModuleList()
         for n in range(self.depth)[::-1]:
             if n == 0:
-                ch_out = 1
+                ch_out = self.input_channels
             else:
                 ch_out  = self.start_channels * (2**(n-1))
             ch_in = self.start_channels * (2**n)
@@ -87,30 +88,32 @@ class Unet(nn.Module):
             )
         return conv
 
-    def forward(self, x):
-        "Forward pass through the network"
-        
+    def forward_unet(self, x):
+        """Forward pass through  down- and upsample path"""
+
         # pass through downsample path
         self.feature_maps = []
         for n in range(self.depth):
             down_conv = self.down_path[n]
             x = down_conv(x)
-            if n < self.depth-1:
+            if n < self.depth - 1:
                 self.feature_maps.append(x)
                 x = self.maxpool(x)
 
         # pass through upsample path
-        for n in range(self.depth-1):
+        for n in range(self.depth - 1):
             trans = self.up_path_trans[n]
             conv = self.up_path_conv[n]
-            
+
             x = trans(x)
-            y = self.feature_maps[-(n+1)]
-            x = conv(torch.cat([x,y], 1))
-            
+            y = self.feature_maps[-(n + 1)]
+            x = conv(torch.cat([x, y], 1))
+        return x
+
+    def forward(self, x):
+        x = self.forward_unet(x)
         # pass through output layer
         x = self.out(x)
-        
         return x
 
     def count_trainable_parameters(self):

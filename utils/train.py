@@ -31,6 +31,8 @@ class Epoch:
         return s
 
     def batch_update(self, x, y):
+        """Should return loss and model prediction
+        """
         raise NotImplementedError
 
     def on_epoch_start(self):
@@ -90,8 +92,19 @@ class TrainEpoch(Epoch):
 
     def batch_update(self, x, y):
         self.optimizer.zero_grad()
-        prediction = self.model.forward(x)
-        loss = self.loss(prediction, y)
+        output = self.model.forward(x)
+
+        if isinstance(output, list):
+            # multiple outputs (intermediate supervision)
+            loss = 0
+            for o in output:
+                loss += self.loss(o, y)
+            prediction = output[-1]
+        else:
+            # single output tensor
+            prediction = output
+            loss = self.loss(prediction, y)
+
         loss.backward()
         self.optimizer.step()
         return loss, prediction
@@ -114,7 +127,13 @@ class ValidEpoch(Epoch):
 
     def batch_update(self, x, y):
         with torch.no_grad():
-            prediction = self.model.forward(x)
+            output = self.model.forward(x)
+            if isinstance(output, list):
+                # multiple outputs
+                prediction = output[-1]
+            else:
+                # single output
+                prediction = output
             loss = self.loss(prediction, y)
         return loss, prediction
     
