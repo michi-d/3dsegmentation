@@ -7,6 +7,8 @@ from torch import Tensor
 import sys
 import tqdm
 
+import utils.imutils as imutils
+import utils.misc as misc
 import seg2d.fakedata as fakedata2d
 
 
@@ -29,6 +31,9 @@ def _percentile_normalization(image_data, percentiles=(1,99)):
 
 
 class ColumnDataset(Dataset):
+    """
+    Basic dataset class for column detection.
+    """
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -53,15 +58,18 @@ class ColumnDataset(Dataset):
 
 
 class Fake2DDataset(ColumnDataset):
+    """
+    Basic dataset class for the 2D fake data.
+    """
 
     def __init__(self, L=512, thr=0.3, seed=None, **kwargs):
         """
-        Dataset object for 2D fake data.
+        Generator function.
 
         Args:
-            L: Number of images to be generated
-            thr: Dataset contains only images with percentage of labeled pixels above this threshold.
-            seed: Random number generator seed
+            L: number of images to be generated
+            thr: generate only images with percentage of labeled pixels above this threshold
+            seed: random number generator seed
         """
         self.L = L
         self.thr = thr
@@ -102,6 +110,9 @@ class Fake2DDataset(ColumnDataset):
 
 
 class SegmentationFake2DDataset(Fake2DDataset):
+    """
+    Dataset class for 2D segmentation.
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -113,6 +124,9 @@ class SegmentationFake2DDataset(Fake2DDataset):
 
 
 class RegressionFake2DDataset(Fake2DDataset):
+    """
+    Dataset class for regression of 128 2D-points
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -138,4 +152,34 @@ class RegressionFake2DDataset(Fake2DDataset):
         coords = (coords-n/2) / n
 
         y = Tensor(coords[np.newaxis, :, :])
+        return X, y
+
+
+class KeypointDetectionFake2DDataset(Fake2DDataset):
+    """
+    Dataset class for keypoint detection (predict heatmap).
+    """
+
+    def __init__(self, sigma=2.0, type='Gaussian', **kwargs):
+        """
+        Args:
+            sigma: standard deviation of the point kernel
+        """
+        super().__init__(**kwargs)
+        self.sigma = sigma
+        self.type = type
+
+    def __getitem__(self, i):
+
+        data, _, center_points = self.get_sample(i)
+
+        # generate label heat map
+        y = np.zeros_like(data)
+        for p in center_points:
+            y, success = imutils.draw_labelmap(y, p, self.sigma, type=self.type)
+            if not success:
+                print(f'Warning: point{tuple(p)} is out-of-bounds.')
+
+        X = misc.to_torch(data[np.newaxis, :, :])
+        y = misc.to_torch(y[np.newaxis, :, :])
         return X, y
