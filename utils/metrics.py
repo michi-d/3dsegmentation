@@ -100,3 +100,15 @@ class Precision(base.Metric):
             threshold=self.threshold,
             ignore_channels=self.ignore_channels,
         )
+
+
+class WassersteinDistance(base.Metric):
+    """Wasserstein Distance between two point clouds"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, y_pr, y_gt):
+        y_pr = self.activation(y_pr)
+        return F.wasserstein_distance(
+            y_pr, y_gt
+        )

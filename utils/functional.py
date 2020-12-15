@@ -3,7 +3,6 @@ __credits__ = ['Pavel Yakubovskiy, https://github.com/qubvel/segmentation_models
 
 import torch
 
-
 def _take_channels(*xs, ignore_channels=None):
     if ignore_channels is None:
         return xs
@@ -149,3 +148,25 @@ def min_euclidean(y_pr, y_gt):
 
     loss = dist.mean()
     return dist.mean()
+
+
+def wasserstein_distance(p, p_hat):
+    """Computes Wasserstein distance between to sets of points
+
+    Args:
+        p, p_hat: (Nx2) arrays of points
+
+    Returns:
+        distance: Wasserstein distance
+    """
+    N_p = p.shape[0]
+    N_p_hat = p_hat.shape[0]
+    dim = p.shape[-1]
+    assert dim == p_hat.shape[-1]
+
+    diff12 = torch.norm(p.reshape((N_p, -1, dim)) - p_hat.reshape((-1, N_p_hat, dim)), p=2, dim=-1)
+    diff21 = torch.norm(p_hat.reshape((N_p_hat, -1, dim)) - p.reshape((-1, N_p, dim)), p=2, dim=-1)
+    diff12, _ = diff12.min(dim=-1)
+    diff21, _ = diff21.min(dim=-1)
+    distance = diff12.sum() + diff21.sum()
+    return distance
