@@ -6,4 +6,5 @@ from . import functional
 from . import base
 from . import meter
 from . import data
+from . import scheduler
 

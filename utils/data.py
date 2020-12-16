@@ -41,6 +41,7 @@ class ColumnDataset(Dataset):
         self.data = []
         self.masks = []
         self.center_points = []
+        self.objective = None
 
         self._load_data(**kwargs)
 
@@ -79,6 +80,7 @@ class Fake2DDataset(ColumnDataset):
             np.random.seed()
 
         super().__init__(**kwargs)
+        self.objective = None
 
     def _load_data(self, **kwargs):
         self._gen_all(**kwargs)
@@ -116,6 +118,7 @@ class SegmentationFake2DDataset(Fake2DDataset):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.objective = 'segmentation'
 
     def __getitem__(self, i):
         X = Tensor(self.data[i][np.newaxis, :, :])
@@ -130,6 +133,7 @@ class RegressionFake2DDataset(Fake2DDataset):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.objective = 'regression'
 
     def __getitem__(self, i):
         # get image
@@ -166,11 +170,11 @@ class KeypointDetectionFake2DDataset(Fake2DDataset):
             sigma: standard deviation of the point kernel
         """
         super().__init__(**kwargs)
+        self.objective = 'keypoint_detection'
         self.sigma = sigma
         self.type = type
 
     def __getitem__(self, i):
-
         data, _, center_points = self.get_sample(i)
 
         # generate label heat map
@@ -180,6 +184,6 @@ class KeypointDetectionFake2DDataset(Fake2DDataset):
             if not success:
                 print(f'Warning: point{tuple(p)} is out-of-bounds.')
 
-        X = misc.to_torch(data[np.newaxis, :, :])
-        y = misc.to_torch(y[np.newaxis, :, :])
+        X = Tensor(data[np.newaxis, :, :])
+        y = Tensor(y[np.newaxis, :, :])
         return X, y
