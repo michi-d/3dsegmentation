@@ -60,9 +60,7 @@ class Hyperparameters():
     """
     def __init__(self, **kwargs):
         self._keys = []
-        for i, (name, value) in enumerate(kwargs.items()):
-            setattr(self, name, value)
-            self._keys.append(name)
+        self.add_params(**kwargs)
 
     def items(self):
         for k in self._keys:
@@ -70,4 +68,13 @@ class Hyperparameters():
 
     def as_dict(self):
         return {k: v for (k, v) in self.items()}
+
+    def add_params(self, **kwargs):
+        for i, (name, value) in enumerate(kwargs.items()):
+            if not name in set(self._keys):
+                setattr(self, name, value)
+                self._keys.append(name)
+            else:
+                print('Cannot be set, exists already.')
+
 
