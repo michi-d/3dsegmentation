@@ -154,19 +154,19 @@ def wasserstein_distance(p, p_hat):
     """Computes Wasserstein distance between to sets of points
 
     Args:
-        p, p_hat: (Nx2) arrays of points
+        p, p_hat: (batch_size x N_point x 2) arrays of points
 
     Returns:
         distance: Wasserstein distance
     """
-    N_p = p.shape[0]
-    N_p_hat = p_hat.shape[0]
-    dim = p.shape[-1]
-    assert dim == p_hat.shape[-1]
+    assert p.shape == p_hat.shape
+    batch_size, n_points, dim = p.shape
 
-    diff12 = torch.norm(p.reshape((N_p, -1, dim)) - p_hat.reshape((-1, N_p_hat, dim)), p=2, dim=-1)
-    diff21 = torch.norm(p_hat.reshape((N_p_hat, -1, dim)) - p.reshape((-1, N_p, dim)), p=2, dim=-1)
+    diff12 = torch.norm(p.reshape((batch_size, n_points, -1, dim))
+                        - p_hat.reshape((batch_size, -1, n_points, dim)), p=2, dim=-1)
+    diff21 = torch.norm(p_hat.reshape((batch_size, n_points, -1, dim))
+                        - p.reshape((batch_size, -1, n_points, dim)), p=2, dim=-1)
     diff12, _ = diff12.min(dim=-1)
     diff21, _ = diff21.min(dim=-1)
-    distance = diff12.sum() + diff21.sum()
+    distance = diff12.mean() + diff21.mean()
     return distance

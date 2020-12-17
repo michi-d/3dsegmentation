@@ -174,16 +174,29 @@ class KeypointDetectionFake2DDataset(Fake2DDataset):
         self.sigma = sigma
         self.type = type
 
+    @staticmethod
+    def _pad_points(points, max_points=128, pad_value=(999,999)):
+        n_points = float(len(points))
+        coords = np.pad(points, ((0, int(max_points - n_points)),
+                                 (0, 0)))
+        coords[int(n_points):, 0] = pad_value[0]
+        coords[int(n_points):, 1] = pad_value[1]
+        return coords
+
     def __getitem__(self, i):
         data, _, center_points = self.get_sample(i)
 
         # generate label heat map
         y = np.zeros_like(data)
         for p in center_points:
-            y, success = imutils.draw_labelmap(y, p, self.sigma, type=self.type)
+            y, success = imutils.draw_heatmap(y, p, self.sigma, type=self.type)
             if not success:
                 print(f'Warning: point{tuple(p)} is out-of-bounds.')
 
-        X = Tensor(data[np.newaxis, :, :])
-        y = Tensor(y[np.newaxis, :, :])
-        return X, y
+        # get point coordinates
+        z = self._pad_points(center_points)
+
+        X = Tensor(data).unsqueeze(0)
+        y = Tensor(y).unsqueeze(0)
+        z = Tensor(z)#.unsqueeze(0)
+        return X, y, z

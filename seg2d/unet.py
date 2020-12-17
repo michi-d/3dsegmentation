@@ -20,7 +20,7 @@ class Unet(nn.Module):
             start_channels: number of output channels in first layer
         """
         
-        super(Unet, self).__init__()
+        super().__init__()
         self.depth = depth
         self.start_channels = start_channels
         self.batchnorm = batchnorm

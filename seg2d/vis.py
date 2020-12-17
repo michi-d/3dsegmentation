@@ -11,7 +11,7 @@ import numpy as np
 def visualize(**images):
     """PLot images in one row."""
     n = len(images)
-    plt.figure(figsize=(16, 5))
+    fig = plt.figure(figsize=(16, 5))
     for i, (name, item) in enumerate(images.items()):
         plt.subplot(1, n, i + 1)
         plt.xticks([])
@@ -29,3 +29,5 @@ def visualize(**images):
 
         plt.colorbar()
     plt.show()
+
+    return fig

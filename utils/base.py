@@ -8,6 +8,7 @@ import torch.nn as nn
 
 
 class Activation(nn.Module):
+
     def __init__(self, activation):
         super().__init__()
         if activation == None or activation == 'identity':
@@ -41,7 +42,10 @@ class BaseObject(nn.Module):
 
 
 class Metric(BaseObject):
-    pass
+
+    def __init__(self, requires_z=False):
+        super().__init__()
+        self.requires_z = requires_z
 
 
 class Loss(BaseObject):

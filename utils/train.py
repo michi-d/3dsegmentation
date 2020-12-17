@@ -47,7 +47,11 @@ class Epoch:
         metrics_meters = {metric.__name__: AverageValueMeter() for metric in self.metrics}
 
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not (self.verbose)) as iterator:
-            for x, y in iterator:
+            for element in iterator:
+                x = element[0]
+                y = element[1]
+                if len(element) == 3: # for keypoint detection
+                    z = element[2]
                 x, y = x.to(self.device), y.to(self.device)
                 loss, y_pred = self.batch_update(x, y)
 
@@ -60,7 +64,11 @@ class Epoch:
 
                 # update metrics logs
                 for metric_fn in self.metrics:
-                    metric_value = metric_fn(y_pred, y).cpu().detach().numpy()
+                    if metric_fn.requires_z: # for keypoint detection
+                        gt = z
+                    else:
+                        gt = y
+                    metric_value = metric_fn(y_pred, gt).cpu().detach().numpy()
                     metrics_meters[metric_fn.__name__].add(metric_value)
                 metrics_logs = {k: v.mean for k, v in metrics_meters.items()}
                 logs.update(metrics_logs)

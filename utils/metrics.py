@@ -3,7 +3,7 @@ __credits__ = ['Pavel Yakubovskiy, https://github.com/qubvel/segmentation_models
 
 from utils import base
 import utils.functional as F
-from utils.base import Activation
+from  utils.base import Activation
 
 
 class IoU(base.Metric):
@@ -104,8 +104,11 @@ class Precision(base.Metric):
 
 class WassersteinDistance(base.Metric):
     """Wasserstein Distance between two point clouds"""
-    def __init__(self, **kwargs):
+    __name__ = 'wasserstein_distance'
+
+    def __init__(self, activation=None, **kwargs):
         super().__init__(**kwargs)
+        self.activation = Activation(activation)
 
     def forward(self, y_pr, y_gt):
         y_pr = self.activation(y_pr)
