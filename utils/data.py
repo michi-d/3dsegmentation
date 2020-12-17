@@ -6,10 +6,13 @@ from torch.utils.data import Dataset
 from torch import Tensor
 import sys
 import tqdm
+import h5py
+import os
 
 import utils.imutils as imutils
 import utils.misc as misc
 import seg2d.fakedata as fakedata2d
+from pathlib import Path
 
 
 def _percentile_normalization(image_data, percentiles=(1,99)):
@@ -63,7 +66,7 @@ class Fake2DDataset(ColumnDataset):
     Basic dataset class for the 2D fake data.
     """
 
-    def __init__(self, L=512, thr=0.3, seed=None, **kwargs):
+    def __init__(self, L=512, thr=0.3, seed=None, h5path=None, **kwargs):
         """
         Generator function.
 
@@ -72,8 +75,9 @@ class Fake2DDataset(ColumnDataset):
             thr: generate only images with percentage of labeled pixels above this threshold
             seed: random number generator seed
         """
-        self.L = L
+        self.L = int(L)
         self.thr = thr
+        self.h5path = h5path
         if seed:
             np.random.seed(seed)
         else:
@@ -82,8 +86,40 @@ class Fake2DDataset(ColumnDataset):
         super().__init__(**kwargs)
         self.objective = None
 
+    def _save_to_h5(self, path):
+        """
+        Saves dataset to h5-file
+        Args:
+            path: target path
+        """
+        size = tuple(self.data[0].shape)
+        f = h5py.File(str(path), 'w')
+        f.create_dataset("data", (self.L, size[0], size[1]), dtype='float32')
+        f.create_dataset("masks", (self.L, size[0], size[1]), dtype='float32')
+        f.create_dataset("center_points", (self.L,), dtype=h5py.vlen_dtype(np.dtype('float32')))
+        for i in range(self.L):
+            f['data'][0] = self.data[0]
+            f['masks'][0] = self.masks[0]
+            f['center_points'][0] = self.center_points[0].flatten()
+        f.close()
+
+    def _load_from_h5(self, path):
+        f = h5py.File(str(path), 'r')
+        self.data = f['data'][:]
+        self.masks = f['masks'][:]
+        self.center_points = [v.reshape((-1,2)) for v in f['center_points'][:]]
+
     def _load_data(self, **kwargs):
-        self._gen_all(**kwargs)
+        if self.h5path:
+            if os.path.isfile(self.h5path):
+                print(f'Loading dataset from {self.h5path}')
+                self._load_from_h5(self.h5path)
+            else:
+                self._gen_all(**kwargs)
+                print(f'Saving dataset to {self.h5path}')
+                self._save_to_h5(self.h5path)
+        else:
+            self._gen_all(**kwargs)
 
     def _gen_all(self, **kwargs):
         """
