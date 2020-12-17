@@ -170,3 +170,27 @@ def wasserstein_distance(p, p_hat):
     diff21, _ = diff21.min(dim=-1)
     distance = diff12.mean() + diff21.mean()
     return distance
+
+
+def total_error(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
+    """Calculate precision score between ground truth and prediction
+    Args:
+        pr (torch.Tensor): predicted tensor
+        gt (torch.Tensor):  ground truth tensor
+        eps (float): epsilon to avoid zero division
+        threshold: threshold for outputs binarization
+    Returns:
+        float: precision score
+    """
+
+    pr = _threshold(pr, threshold=threshold)
+    pr, gt = _take_channels(pr, gt, ignore_channels=ignore_channels)
+
+    tp = torch.sum(gt * pr)
+    fp = torch.sum(pr) - tp
+    fn = torch.sum(gt) - tp
+
+    n_pixels = pr.numel()
+    score = (fn + fp) / n_pixels
+
+    return score

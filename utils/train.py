@@ -52,6 +52,7 @@ class Epoch:
                 y = element[1]
                 if len(element) == 3: # for keypoint detection
                     z = element[2]
+                    z.to(self.device)
                 x, y = x.to(self.device), y.to(self.device)
                 loss, y_pred = self.batch_update(x, y)
 

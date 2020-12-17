@@ -28,6 +28,5 @@ def visualize(**images):
             plt.imshow(image)
 
         plt.colorbar()
-    plt.show()
 
     return fig

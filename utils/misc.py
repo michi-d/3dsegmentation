@@ -52,3 +52,22 @@ def count_trainable_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     params = sum([np.prod(p.size()) for p in model_parameters])
     return params
+
+
+class Hyperparameters():
+    """
+    Custom data structure for hyperparameters
+    """
+    def __init__(self, **kwargs):
+        self._keys = []
+        for i, (name, value) in enumerate(kwargs.items()):
+            setattr(self, name, value)
+            self._keys.append(name)
+
+    def items(self):
+        for k in self._keys:
+            yield (k, getattr(self, k))
+
+    def as_dict(self):
+        return {k: v for (k, v) in self.items()}
+

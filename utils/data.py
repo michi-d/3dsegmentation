@@ -98,9 +98,9 @@ class Fake2DDataset(ColumnDataset):
         f.create_dataset("masks", (self.L, size[0], size[1]), dtype='float32')
         f.create_dataset("center_points", (self.L,), dtype=h5py.vlen_dtype(np.dtype('float32')))
         for i in range(self.L):
-            f['data'][0] = self.data[0]
-            f['masks'][0] = self.masks[0]
-            f['center_points'][0] = self.center_points[0].flatten()
+            f['data'][i] = self.data[i]
+            f['masks'][i] = self.masks[i]
+            f['center_points'][i] = self.center_points[i].flatten()
         f.close()
 
     def _load_from_h5(self, path):
