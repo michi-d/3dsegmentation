@@ -40,6 +40,7 @@ def to_torch(ndarray):
                          .format(type(ndarray)))
     return ndarray
 
+
 def count_trainable_parameters(model):
     """
     Counts trainable parameters in a model.
