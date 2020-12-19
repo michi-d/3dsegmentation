@@ -5,6 +5,12 @@ import numpy as np
 from math import sin, cos, acos, sqrt, pi
 from math import atan2
 
+import utils.volutils as volutils
+from scipy.linalg import norm
+
+import ipyvolume as ipv
+import numbers
+
 
 def get_points_icosahedron():
     """Source: https://stackoverflow.com/questions/46777626/mathematically-producing-sphere-shaped-hexagonal-grid
@@ -131,6 +137,234 @@ def get_hex_points_icosahedron(n=1):
     hex_points = np.unique(hex_points, axis=0)
 
     return hex_points
+
+
+class OpticLobeGeometry():
+    """
+    Base class defining geometric objects within the data.
+    Can generate random geometries.
+    """
+
+    empty = np.zeros(shape=(0, 3))
+
+    def __init__(self, points=empty, e_r=empty, e_theta=empty, e_phi=empty, center=empty,
+                 bezier_points=[]):
+
+        self.points = points  # coordinates of entry points
+        self.e_r = e_r  # radial unit vector from ellisoid center
+        self.e_theta = e_theta  # theta unit vector (dorso-ventral axis)
+        self.e_phi = e_phi  # phi unit vector (anterior-posterior axis)
+        self.center = center  # center of ellipsoid
+        self.bezier_points = bezier_points  # points defining the neurite bezier curves
+
+    @classmethod
+    def generate(cls, n_icosahedron=15, scale_xyz=(1., 1., 1.), seed=0, shift_xyz=(0.5, 0.5, 0.5),
+                 rotate_xyz=(0., 0., 0.)):
+        """
+        Generate geometry for a given set of parameters
+
+        n_icosahedron: (n+1)**2 triangles per face of the icosahedron
+        """
+
+        # generate a hexagonal pattern on a sphere using the icosahedron method
+        points = get_hex_points_icosahedron(n=n_icosahedron)
+        points_rtp = volutils.cart2spherical(points)  # transform to spherical coordinates
+        e_r, e_theta, e_phi = volutils.get_spherical_unit_vectors(points_rtp)  # get unit vectors
+
+        # scale coordinates
+        points, e_r, e_theta, e_phi = volutils.scale_vectors(
+            points, e_r, e_theta, e_phi, scale_xyz=scale_xyz
+        )
+
+        # choose random surface point to the origin of the coordinate system
+        if isinstance(seed, numbers.Number):
+            np.random.seed(seed)
+        ind = np.random.randint(low=0, high=len(points))
+        A = points[ind]
+        points = points - A
+        center = (-A).reshape(1, 3)
+
+        n = A / norm(A, ord=2)
+
+        # rotate radial vector of this point to z-axis
+        z = np.array([0, 0, 1])
+        k = (n + z) / 2
+        R = volutils.rodrigues_rotation_matrix(k, np.pi)
+        points, e_r, e_theta, e_phi, center = volutils.rotate_vectors(
+            points, e_r, e_theta, e_phi, center, R=R
+        )
+
+        # shift surface into center of volume (0..1)
+        points += np.asarray(shift_xyz).reshape(1, 3) + 0.5
+        center += np.asarray(shift_xyz).reshape(1, 3) + 0.5
+
+        # rotate the whole volume
+        Rx = volutils.rodrigues_rotation_matrix([1, 0, 0], rotate_xyz[0])
+        Ry = volutils.rodrigues_rotation_matrix([0, 1, 0], rotate_xyz[1])
+        Rz = volutils.rodrigues_rotation_matrix([0, 0, 1], rotate_xyz[2])
+        R = np.dot(Rz, np.dot(Ry, Rx))
+        points, e_r, e_theta, e_phi, center = volutils.rotate_vectors(
+            points, e_r, e_theta, e_phi, center, R=R
+        )
+
+        # clip points far outside the volume
+        clip_mask = (points < -0.2).any(axis=1) | (points > 1.2).any(axis=1)
+        points, e_r, e_theta, e_phi = volutils.clip_points(
+            points, e_r, e_theta, e_phi, clip_mask=clip_mask
+        )
+
+        if len(points) == 0:  # return empty volume and try again
+            return cls(points, e_r, e_theta, e_phi, center)
+
+        # random cutoff
+        cutoff_mask = cls._random_cutoff(points, e_theta, e_phi)
+        points, e_r, e_theta, e_phi = volutils.clip_points(
+            points, e_r, e_theta, e_phi, clip_mask=cutoff_mask
+        )
+
+        # get points for bezier curves (later neurites)
+        bezier_points = cls._get_bezier_points(points, e_r, e_theta, e_phi, center)
+
+        return cls(points, e_r, e_theta, e_phi, center, bezier_points)
+
+    @staticmethod
+    def _get_bezier_points(points, e_r, e_theta, e_phi, center):
+        """Generate points for bezier curves
+        """
+        # choose random plane perpendicular through surface
+        ind = np.random.randint(low=0, high=len(points))
+        a = points[ind]
+        phi = np.random.uniform(0, 2 * np.pi)
+        n = e_phi[ind] * np.cos(phi) + e_theta[ind] * np.sin(phi)
+        n = n / norm(n, ord=2)
+
+        # get perpendicular foot point from each point to this plane
+        distance = np.dot((points - a), n)
+        foot_points = points - distance.reshape(-1, 1) * n.reshape(1, 3)
+        p2 = foot_points
+
+        # get offset point in radial direction
+        p1 = points - e_r * 0.1
+
+        # end points
+        p3 = center + n * distance.reshape(-1, 1) * 0.25  # add spread according to distance
+        p3 = p3 + np.random.normal(0, 0.05, size=p3.shape)  # add variability
+        return [points, p1, p2, p3]
+
+    @staticmethod
+    def _random_cutoff(points, e_theta, e_phi):
+        """Random cutoff beyond plane perpendicular to the surface
+        """
+        # choose random point and random plane orientation
+        ind = np.random.randint(low=0, high=len(points))
+        a = points[ind]
+        w = np.random.uniform(1e-6, 1, size=2)
+        n = e_phi[ind] * w[0] + e_theta[ind] * w[1]
+        n = n / norm(n, ord=2)
+
+        clip_mask = np.dot((points - a), n) < 0
+        return clip_mask
+
+    def _count_points_within_volume(self):
+        inside = (self.points > 0).all(axis=1) & (self.points < 1).all(axis=1)
+        return inside.sum()
+
+    @classmethod
+    def generate_randomly(cls, min_points=50,
+                          n_icosahedron=[8, 15], scale_xyz=[0.7, 1.5],
+                          shift_xyz=[-0.5, 0.5], rotate_xyz=[0, 360],
+                          seed=None):
+
+        if isinstance(seed, numbers.Number):
+            np.random.seed(seed)
+
+        n_points = 0
+        subseed = np.random.randint(0, 1e6)
+        while n_points < 100:
+            n_icosahedron_ = np.random.randint(n_icosahedron[0], n_icosahedron[1] + 1)
+            scale_xyz_ = np.random.uniform(low=scale_xyz[0], high=scale_xyz[1], size=(3,))
+            shift_xyz_ = np.random.uniform(low=shift_xyz[0], high=shift_xyz[1], size=(3,))
+            rotate_xyz_ = np.random.uniform(low=rotate_xyz[0], high=rotate_xyz[1], size=(3,))
+
+            new = cls.generate(n_icosahedron=n_icosahedron_, scale_xyz=scale_xyz_, shift_xyz=shift_xyz_,
+                               rotate_xyz=rotate_xyz_, seed=subseed)
+            n_points = new._count_points_within_volume()
+            subseed += 1
+
+        return new
+
+    @staticmethod
+    def _my_ipv_vectorplot(xyz, uvw, N=10, length=1, **kwargs):
+        """Generates a scatter plot of small points along a vector.
+
+        Args:
+            xyz: start point
+            uvw: direction
+            N: number of points rendered
+            length: length of the line
+            **kwargs: additional arguments of ipv.scatter
+        """
+        points = []
+        for x in np.linspace(0, length, N):
+            tmp = xyz + uvw * x
+            points.append(tmp)
+        points = np.concatenate(points, axis=0)
+        ipv.scatter(points[:, 0], points[:, 1], points[:, 2], **kwargs)
+
+    @staticmethod
+    def _plot_bezier_curves(list_p, N=10, **kwargs):
+        """Plot neurites as bezier curves.
+        """
+        curves = []
+        for t in np.linspace(0, 1, N):
+            tmp = volutils.bezier(t, list_p)
+            curves.append(tmp)
+        curves = np.concatenate(curves, axis=0)
+        ipv.scatter(curves[:, 0], curves[:, 1], curves[:, 2], **kwargs)
+
+    @staticmethod
+    def _arrange_bezier_points(bp, order=3):
+        if order == 1:
+            p = [bp[0], bp[-1]]
+        elif order == 2:
+            p = [bp[0], bp[2], bp[3]]
+        elif order == 3:
+            p = [bp[0], bp[1], bp[2], bp[3]]
+        return p
+
+    def plot_geometry(self, plot_e_r=True, plot_e_phi=True, plot_e_theta=True, plot_bezier=True,
+                      bezier_order=3):
+        """
+        Generates 3D ipyvolume plot
+        """
+        fig = ipv.figure()
+
+        scatter = ipv.scatter(self.center[:, 0], self.center[:, 1], self.center[:, 2], color='#ff0000', size=5)
+
+        if plot_e_r:
+            self._my_ipv_vectorplot(np.repeat(self.center, len(self.points), axis=0), self.e_r,
+                                    length=1, N=1000, size=0.2, color='#00ff00')
+
+        if plot_e_theta:
+            self._my_ipv_vectorplot(self.points, self.e_theta,
+                                    length=0.05, N=100, size=0.2, color='#ff0000')
+
+        if plot_e_phi:
+            self._my_ipv_vectorplot(self.points, self.e_phi,
+                                    length=0.05, N=100, size=0.2, color='#ff0000')
+
+        if plot_bezier:
+            assert 1 <= bezier_order <= 3
+            p = self._arrange_bezier_points(self.bezier_points, order=bezier_order)
+            self._plot_bezier_curves(p, N=100, size=0.5, color='#ff00ff')
+
+        scatter = ipv.scatter(self.points[:, 0], self.points[:, 1], self.points[:, 2], color='#0000bb', size=1)
+
+        ipv.xlim(0, 1)
+        ipv.ylim(0, 1)
+        ipv.zlim(0, 1)
+
+        return fig
 
 
 class Point():
