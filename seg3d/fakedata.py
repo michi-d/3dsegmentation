@@ -149,7 +149,10 @@ class OpticLobeGeometry():
 
     def __init__(self, points=empty, e_r=empty, e_theta=empty, e_phi=empty, center=empty,
                  bezier_points=[]):
-
+        """
+        Generates empty object.
+        Call alternative generator methods instead.
+        """
         self.points = points  # coordinates of entry points
         self.e_r = e_r  # radial unit vector from ellisoid center
         self.e_theta = e_theta  # theta unit vector (dorso-ventral axis)
@@ -161,9 +164,20 @@ class OpticLobeGeometry():
     def generate(cls, n_icosahedron=15, scale_xyz=(1., 1., 1.), seed=0, shift_xyz=(0.5, 0.5, 0.5),
                  rotate_xyz=(0., 0., 0.)):
         """
-        Generate geometry for a given set of parameters
+        Generate basic geometry for a given set of parameters.
+        - Generates hexagonal points on a sphere
+        - Performs scaling, shifting and rotations
+        - Generates a set of points defining bezier curves for the neurites
 
-        n_icosahedron: (n+1)**2 triangles per face of the icosahedron
+        Args:
+            n_icosahedron: (n+1)**2 triangles per face of the icosahedron
+            scale_xyz: scaling factors for each axis
+            seed: random seed
+            shift_xyz: shift along xyz
+            rotate_xyz: rotation angles around x,y,z axis
+
+        Returns:
+            Class object with the given parameters.
         """
 
         # generate a hexagonal pattern on a sphere using the icosahedron method
@@ -270,17 +284,31 @@ class OpticLobeGeometry():
         return inside.sum()
 
     @classmethod
-    def generate_randomly(cls, min_points=50,
+    def generate_randomly(cls, min_points=100,
                           n_icosahedron=[8, 15], scale_xyz=[0.7, 1.5],
                           shift_xyz=[-0.5, 0.5], rotate_xyz=[0, 360],
                           seed=None):
+        """
+        Generates a random volume with random geometry.
+        Calls "generate" with random parameters.
+        Args:
+            min_points: acceptable minimum number of points
+            n_icosahedron: [low high] range of values for n_icosahedron
+            scale_xyz: [low high] range of values for scaling factors
+            shift_xyz: [low high] range of values for shifts
+            rotate_xyz: [low high] range of values for rotation angles
+            seed: random seed
+
+        Returns:
+            Randomly initiated class object.
+        """
 
         if isinstance(seed, numbers.Number):
             np.random.seed(seed)
 
         n_points = 0
         subseed = np.random.randint(0, 1e6)
-        while n_points < 100:
+        while n_points < min_points:
             n_icosahedron_ = np.random.randint(n_icosahedron[0], n_icosahedron[1] + 1)
             scale_xyz_ = np.random.uniform(low=scale_xyz[0], high=scale_xyz[1], size=(3,))
             shift_xyz_ = np.random.uniform(low=shift_xyz[0], high=shift_xyz[1], size=(3,))
@@ -324,6 +352,8 @@ class OpticLobeGeometry():
 
     @staticmethod
     def _arrange_bezier_points(bp, order=3):
+        """Arranges list of bezier points according to given order.
+        """
         if order == 1:
             p = [bp[0], bp[-1]]
         elif order == 2:
@@ -334,8 +364,7 @@ class OpticLobeGeometry():
 
     def plot_geometry(self, plot_e_r=True, plot_e_phi=True, plot_e_theta=True, plot_bezier=True,
                       bezier_order=3):
-        """
-        Generates 3D ipyvolume plot
+        """Generates 3D ipyvolume plot
         """
         fig = ipv.figure()
 
