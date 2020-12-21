@@ -15,6 +15,8 @@ import utils.volutils as volutils
 import utils.misc as misc
 from pathlib import Path
 
+import traceback
+
 
 def _percentile_normalization(image_data, percentiles=(1,99)):
     """Normalize pixel values within a given percentile range
@@ -189,7 +191,14 @@ class Fake3DDataset(ColumnDataset):
         """
         Generate one picture (with fraction of labeled pixels above the given threshold)
         """
-        volume = fakedata.RandomVolume(random_geometry=True, **kwargs)
+        volume = None
+        while volume is None:
+            try:
+                volume = fakedata.RandomVolume(random_geometry=True, **kwargs)
+            except Exception as err:
+                print('Some error occurred while rendering the volume:')
+                traceback.print_tb(err.__traceback__)
+
         #volume = fakedata.RandomVolume()
 
         vol_data = volume.vol_data
