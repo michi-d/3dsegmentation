@@ -3,6 +3,7 @@ __author__ = ['Michael Drews']
 
 import numpy as np
 import math
+from scipy.linalg import norm
 
 
 def cart2spherical(xyz):
@@ -172,4 +173,28 @@ def bezier(t, p):
     elif order == 3:
         return (1-t)*bezier(t, [p[0], p[1], p[2]]) + \
                 t*bezier(t, [p[1], p[2], p[3]])
+
+
+def unique_vectors(vectors, tol=1e-6):
+    """
+    Deletes duplicate vectors from an array, within a given tolerance.
+
+    Args:
+        vectors: (Nxd) array (N d-dimensional points)
+        tol: tolerances
+
+    Returns:
+        clean_vectors: cleaned vectors
+        remove_indices: indexes removed
+    """
+    distances = norm(vectors.reshape(1, -1, 3) - vectors.reshape(-1, 1, 3), ord=2, axis=2)
+    remove_indices = list()
+    for (i, d) in enumerate(distances):
+        equal = np.nonzero(distances[i, :] < tol)[0]
+        equal = equal[equal > i]
+        remove_indices += list(equal)
+    remove_indices = np.array(remove_indices)
+    clean_vectors = np.delete(vectors, remove_indices, axis=0)
+    return clean_vectors, remove_indices
+
 

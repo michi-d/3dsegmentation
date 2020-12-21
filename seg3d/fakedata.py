@@ -10,6 +10,7 @@ from scipy.linalg import norm
 
 import ipyvolume as ipv
 import numbers
+import cv2
 
 
 def get_points_icosahedron():
@@ -236,9 +237,15 @@ class OpticLobeGeometry():
             points, e_r, e_theta, e_phi, clip_mask=cutoff_mask
         )
 
+        # remove duplicate points
+        points, remove_indices = volutils.unique_vectors(points, tol=1e-6) # delete duplicates
+        e_r = np.delete(e_r, remove_indices, axis=0)
+        e_theta = np.delete(e_theta, remove_indices, axis=0)
+        e_phi = np.delete(e_phi, remove_indices, axis=0)
+
         # get points for bezier curves (later neurites)
         bezier_points = cls._get_bezier_points(points, e_r, e_theta, e_phi, center)
-
+        #import pdb; pdb.set_trace()
         return cls(points, e_r, e_theta, e_phi, center, bezier_points)
 
     @staticmethod
@@ -258,7 +265,10 @@ class OpticLobeGeometry():
         p2 = foot_points
 
         # get offset point in radial direction
-        p1 = points - e_r * 0.1
+        w_r = np.random.uniform(0, 0.2, size=(len(e_r))).reshape(-1,1)
+        w_phi = np.random.uniform(0, 0.1, size=(len(e_phi))).reshape(-1,1)
+        w_theta = np.random.uniform(0, 0.1, size=(len(e_theta))).reshape(-1,1)
+        p1 = points - e_r*w_r + e_phi*w_phi + e_theta*w_theta
 
         # end points
         p3 = center + n * distance.reshape(-1, 1) * 0.25  # add spread according to distance
@@ -396,27 +406,405 @@ class OpticLobeGeometry():
         return fig
 
 
-class Point():
+class RandomVolume():
 
-    def __init__(self, x, y, z, value):
-        self.x = x
-        self.y = y
-        self.z = z
-        self.value = value
-
-    @classmethod
-    def from_coords(cls, coords, values):
+    def __init__(self, L_xy=256, L_z=256,
+                 relative_diameter=0.70, relative_depth=3 * 0.75,
+                 type_ratios=[2, 3, 3, 3], var_range=[0.7, 1.0],
+                 random_geometry=False, vol_dtype='float32', verbose=1, **kwargs):
         """
-        Generates many instances from coordinates
+        Generates FakeData3D object
+
+
+        **kwargs: additional arguments are for the geometry generator
+        """
+
+        # generate underlying geometry
+        if random_geometry:
+            if verbose:
+                print("Generating random geometry...")
+            self.geometry = OpticLobeGeometry.generate_randomly(**kwargs)
+        else:
+            if verbose:
+                print("Generating standard geometry...")
+            self.geometry = OpticLobeGeometry.generate(**kwargs)
+
+        self.relative_diameter = relative_diameter
+        self.relative_depth = relative_depth
+        self.L_xy = L_xy
+        self.L_z = L_z
+        self.vol_dtype = vol_dtype
+        self.type_ratios = type_ratios
+        self.var_range = var_range
+        self.verbose = verbose
+
+        self._gen_space()
+        self._gen_ground_truth()
+
+        # choose random columns for the different types (empty, A, B, C)
+        self.mid_points = self.geometry.points + self.geometry.e_r * self.depth / 2
+        fractions = self.type_ratios / np.sum(self.type_ratios)
+        fractions = np.cumsum(fractions)
+        ind = (fractions * len(self.mid_points)).astype(np.int)
+        permutation = np.random.permutation(range(len(self.mid_points)))
+
+        ind_empty = permutation[:ind[0]]
+        ind_A = permutation[ind[0]:ind[1]]
+        ind_B = permutation[ind[1]:ind[2]]
+        ind_C = permutation[ind[2]:ind[3]]
+        # print(len(ind_empty), len(ind_A), len(ind_B), len(ind_C))
+
+        # render columns type A
+        if self.verbose:
+            print("Generating columns type A...")
+        self._generate_knobs(
+            self.mid_points[ind_A], self.geometry.e_r[ind_A], self.geometry.e_theta[ind_A], self.geometry.e_phi[ind_A],
+            n_points=10, n_points_final=250, baseline_intensity=50,
+            std_intensity=1.2, v_std=1.0, std_radial=0.12, std_axial=0.10 * 2,
+            n_iterations=3, mode='A'
+        )
+
+        if self.verbose:
+            print("Generating columns type B...")
+        self._generate_knobs(
+            self.mid_points[ind_B], self.geometry.e_r[ind_B], self.geometry.e_theta[ind_B], self.geometry.e_phi[ind_B],
+            n_points=2, n_points_final=250, baseline_intensity=50,
+            std_intensity=1.0, v_std=1.0, std_radial=0.12, std_axial=0.10 * 2,
+            n_iterations=4, mode='B'
+        )
+        if self.verbose:
+            print("Generating columns type C...")
+        self._generate_knobs(
+            self.mid_points[ind_C], self.geometry.e_r[ind_C], self.geometry.e_theta[ind_C], self.geometry.e_phi[ind_C],
+            n_points=75, n_points_final=250, baseline_intensity=50,
+            std_intensity=1.0, v_std=1.0, std_radial=0.06, std_axial=0.10 * 2,
+            n_iterations=2, mode='C', ring_radius=0.3, ring_std=0.1
+        )
+
+        if self.verbose:
+            print("Generating neurites...")
+        self._generate_neurites()
+
+        if self.verbose:
+            print("Applying filters...")
+        self._sim_2p_imaging()
+
+        # scale variance of distribution randomly
+        self.vol_data = self._scale_variance_randomly(self.vol_data, var_range=self.var_range)
+
+    def _gen_space(self):
+
+        self.vol_data = np.zeros((self.L_xy, self.L_xy, self.L_z), dtype=self.vol_dtype)
+        self.vol_labels = np.zeros((self.L_xy, self.L_xy, self.L_z), dtype='bool')
+
+        # generate space coordinates
+        X, Y, Z = np.mgrid[0:self.L_xy, 0:self.L_xy, 0:self.L_z]
+        self.X = (X / self.L_xy).astype(self.vol_dtype)
+        self.Y = (Y / self.L_xy).astype(self.vol_dtype)
+        self.Z = (Z / self.L_z).astype(self.vol_dtype)
+
+    def _gen_ground_truth(self):
+
+        if self.verbose:
+            print("Generating ground truth...")
+
+        # find mean distances between neighbors (at entry points)
+        distances = norm(self.geometry.points.reshape(1, -1, 3) - \
+                         self.geometry.points.reshape(-1, 1, 3), ord=2, axis=2)
+        mean_spacing = np.mean(np.ma.masked_equal(distances, 0.0, copy=True).min(axis=0).data)
+        self.mean_spacing = mean_spacing
+
+        # define radius at entry points
+        r0 = mean_spacing * self.relative_diameter / 2.
+        self.depth = mean_spacing * self.relative_depth
+
+        # find end points
+        end_points = self.geometry.points + self.depth * self.geometry.e_r
+        end_distances = norm(end_points.reshape(1, -1, 3) -
+                             end_points.reshape(-1, 1, 3), ord=2, axis=2)
+        end_mean_spacing = np.mean(np.ma.masked_equal(end_distances, 0.0, copy=True).min(axis=0).data)
+        self.end_mean_spacing = end_mean_spacing
+
+        # find radius factor at end points
+        depth_factor = end_mean_spacing / mean_spacing
+
+        # calculate optimal step width for 3D loop
+        dphi = 0.6 / (max(self.L_xy, self.L_z) * r0 * depth_factor)
+        dr = 0.6 / max(self.L_xy, self.L_z)
+        dz = 0.6 / max(self.L_xy, self.L_z)
+
+        # generate labeled 3D-cones at each point
+        phi_range = np.arange(0, 2 * np.pi, dphi)
+        r_range = np.arange(0, r0, dr)
+        z_range = np.arange(0, self.depth, dz)
+
+        for phi in phi_range:
+            for r in r_range:
+                for z in z_range:
+                    r_ = r * ((z / self.depth) * (depth_factor - 1) + 1)
+
+                    p = self.geometry.points + r_ * np.cos(phi) * self.geometry.e_phi + \
+                        r_ * np.sin(phi) * self.geometry.e_theta + \
+                        z * self.geometry.e_r
+
+                    ind = np.round(p * np.array([self.L_xy, self.L_xy, self.L_z]), 2).astype(np.int)
+                    x_clip = (0 <= ind[:, 0]) & (ind[:, 0] < self.L_xy)
+                    y_clip = (0 <= ind[:, 1]) & (ind[:, 1] < self.L_xy)
+                    z_clip = (0 <= ind[:, 2]) & (ind[:, 2] < self.L_z)
+                    ind = ind[x_clip & y_clip & z_clip]
+
+                    self.vol_labels[ind[:, 0], ind[:, 1], ind[:, 2]] = 1
+
+    @staticmethod
+    def _generate_gaussian_cloud(P, n_points, v_mean, v_std, x_mean, x_std, y_mean, y_std, z_mean, z_std):
+        """
+        Generates a cloud of points within a 3D Gaussian ellipsoid around P.
 
         Args:
-            coords: array of coordinates (N x 3)
-            values: array of values (N,)
+            P: (r, e_r, e_theta, e_phi) of central points
+            n_points: how many points to place in vicinity of P
+            v_mean: mean intensity of points
+            v_std: std of intensity
+            x_mean: center of gaussian along e_phi direction (usually 0)
+            x_std: std of gaussian along e_phi direction
+            y_mean, y_std: same of e_theta direction
+            z_mean, z_std: same for e_r direction
 
         Returns:
-            out: list of point instances
+            cloud: set of points (n_points x 3)
+            values: intensity values for each point
         """
-        out = []
-        for x, v in zip(coords, values):
-            out.append(cls(x[0], x[1], x[2], v))
-        return out
+
+        r, e_r, e_theta, e_phi = P
+
+        x = np.random.normal(loc=x_mean, scale=x_std, size=n_points).reshape(-1, 1)
+        y = np.random.normal(loc=y_mean, scale=y_std, size=n_points).reshape(-1, 1)
+        z = np.random.normal(loc=z_mean, scale=z_std, size=n_points).reshape(-1, 1)
+
+        values = np.random.normal(loc=v_mean, scale=v_std, size=n_points)
+
+        cloud = r + x * e_phi.reshape(1, 3) + y * e_theta.reshape(1, 3) + z * e_r.reshape(1, 3)
+
+        return cloud, values
+
+    @staticmethod
+    def _generate_ring_cloud(P, n_points, v_mean, v_std, ring_radius, ring_std, z_mean, z_std):
+        """
+        Generates a cloud of points within a 3D "empty" cylinder around P
+
+        Args:
+            P: (r, e_r, e_theta, e_phi) of central points
+            n_points: how many points to place in vicinity of P
+            v_mean: mean intensity of points
+            v_std: std of intensity
+            ring_radius: radius of cylinder
+            r_std: std of radius
+            z_mean: center of gaussian along e_r direction (usually 0)
+            z_std: std of gaussian along e_r direction
+
+        Returns:
+            cloud: set of points (n_points x 3)
+            values: intensity values for each point
+        """
+
+        r, e_r, e_theta, e_phi = P
+
+        radius = np.random.normal(loc=ring_radius, scale=ring_std, size=n_points).reshape(-1, 1)
+        phi = np.random.uniform(low=0, high=360, size=n_points).reshape(-1, 1)
+        z = np.random.normal(loc=z_mean, scale=z_std, size=n_points).reshape(-1, 1)
+
+        values = np.random.normal(loc=v_mean, scale=v_std, size=n_points)
+
+        cloud = r + np.cos(phi) * radius * e_phi.reshape(1, 3) + \
+                np.sin(phi) * radius * e_theta.reshape(1, 3) + \
+                z * e_r.reshape(1, 3)
+
+        return cloud, values
+
+    def _generate_knobs(self, points, e_r, e_theta, e_phi,
+                        n_points=10, n_points_final=250,
+                        baseline_intensity=50, std_intensity=1.2, v_std=1.0,
+                        std_radial=0.12, std_axial=0.10 * 2,
+                        n_iterations=1, current_depth=1, mode='A',
+                        ring_radius=0.3, ring_std=0.1):
+        """
+        Recursively generates gaussian clouds around gaussian clouds of a set of input points.
+
+        Args:
+            points: seed set of points
+            e_r, e_theta, e_phi: associated unit vectors
+            n_points: number of points to generate at each iteration
+            n_points_final: number of points in final cloud around each point
+            baseline_intensity: general baseline intensity
+            std_intensity: std of lognormal distribution around baseline
+            v_std: std of intensity for each local point cloud
+            std_radial: std in x or y direction (e_phi, e_theta)
+            std_axial: std along z direction (e_r)
+            n_iteration: Iteration depth
+            mode: A (more dense gaussians), B (more clustered), C (ring structure)
+            ring_radius: cylinder radius for type C
+            ring_std: std for cylinder radius for type C
+        """
+
+        for idx in range(len(points)):  # for each point
+
+            # set point
+            P = (points[idx],
+                 e_r[idx],
+                 e_theta[idx],
+                 e_phi[idx])
+
+            # generate sub-cloud of points around P
+            v_mean = np.random.lognormal(mean=1.0, sigma=std_intensity, size=(1)) * baseline_intensity
+            v_std = v_std
+            x_mean = 0
+            x_std = self.mean_spacing * std_radial
+            y_mean = 0
+            y_std = self.mean_spacing * std_radial
+            z_mean = 0
+            z_std = self.mean_spacing * std_axial
+
+            if mode == 'A':
+                cloud_points, values = self._generate_gaussian_cloud(
+                    P, n_points, v_mean, v_std, x_mean, x_std, y_mean, y_std, z_mean, z_std
+                )
+            elif mode == 'B':
+                cloud_points, values = self._generate_gaussian_cloud(
+                    P, n_points + current_depth, v_mean, v_std, x_mean, x_std, y_mean, y_std, z_mean, z_std
+                )
+            elif mode == 'C':
+                # "ring structure"
+                ring_radius_ = ring_radius * self.mean_spacing
+                ring_std_ = ring_std * self.mean_spacing
+                cloud_points, values = self._generate_ring_cloud(
+                    P, n_points, v_mean, v_std, ring_radius_, ring_std_, z_mean, z_std
+                )
+
+            # if max iteration depth is reached: generate a final cloud with 'n_points_final' points
+            if current_depth == n_iterations:
+
+                # randomly chose a new z-variation for variation in "vertical structures"
+                z_std = np.random.normal(loc=z_std, scale=z_std)
+                z_std = max(0, z_std)
+
+                # generate final point cloud
+                cloud_points, values = self._generate_gaussian_cloud(
+                    P, n_points_final, v_mean, v_std, x_mean, x_std, y_mean, y_std, z_mean, z_std
+                )
+
+                # finally, render points
+                ind = np.round(cloud_points * np.array([self.L_xy, self.L_xy, self.L_z]), 2).astype(np.int)
+                x_clip = (0 <= ind[:, 0]) & (ind[:, 0] < self.L_xy)
+                y_clip = (0 <= ind[:, 1]) & (ind[:, 1] < self.L_xy)
+                z_clip = (0 <= ind[:, 2]) & (ind[:, 2] < self.L_z)
+                ind = ind[x_clip & y_clip & z_clip]
+                values = values[x_clip & y_clip & z_clip]
+
+                self.vol_data[ind[:, 0], ind[:, 1], ind[:, 2]] = values
+
+            else:
+
+                # generate subcloud with unit vectors for the given center point
+                new_e_r = e_r[idx].reshape(1, 3).repeat(len(cloud_points), axis=0)
+                new_e_theta = e_theta[idx].reshape(1, 3).repeat(len(cloud_points), axis=0)
+                new_e_phi = e_phi[idx].reshape(1, 3).repeat(len(cloud_points), axis=0)
+
+                # call itself with same parameters but 1 more depth
+                self._generate_knobs(
+                    cloud_points, new_e_r, new_e_theta, new_e_phi,
+                    n_points=n_points, n_points_final=n_points_final, baseline_intensity=baseline_intensity,
+                    std_intensity=std_intensity, v_std=v_std, std_radial=std_radial, std_axial=std_axial,
+                    n_iterations=n_iterations, current_depth=current_depth + 1, mode=mode
+                )
+
+    def _generate_neurites(self, baseline_intensity=50, std_intensity=1.0, intensity_factor=2,
+                           frac_empty=0.3, position_noise=0.025):
+        """
+        Walk along bezier curves and fill voxels.
+        """
+
+        # get bezier points
+        list_p = self.geometry._arrange_bezier_points(self.geometry.bezier_points, order=3)
+
+        # seed intensity values
+        values_ = np.random.lognormal(mean=1.0, sigma=std_intensity,
+                                      size=(len(self.geometry.points))) * baseline_intensity
+
+        # delete some neurites
+        ind = np.random.permutation(range(len(values_)))[:int(frac_empty * len(values_))]
+        values_[ind] = 0
+
+        # generate points
+        curves = []
+        values = []
+        for t in np.linspace(0, 1, max(self.L_xy, self.L_z)):
+            tmp = volutils.bezier(t, list_p)
+            curves.append(tmp)
+            values.append(values_)
+        curves = np.concatenate(curves, axis=0)
+        values = np.concatenate(values, axis=0)
+
+        # add position noise
+        curves = np.repeat(curves, 4, axis=0)
+        values = np.repeat(values, 4, axis=0)
+
+        noise = np.random.normal(loc=0, scale=self.mean_spacing * position_noise, size=curves.shape)
+        curves = curves + noise
+
+        # finally, render points
+        ind = np.round(curves * np.array([self.L_xy, self.L_xy, self.L_z]), 2).astype(np.int)
+        x_clip = (0 <= ind[:, 0]) & (ind[:, 0] < self.L_xy)
+        y_clip = (0 <= ind[:, 1]) & (ind[:, 1] < self.L_xy)
+        z_clip = (0 <= ind[:, 2]) & (ind[:, 2] < self.L_z)
+        ind = ind[x_clip & y_clip & z_clip]
+        values = values[x_clip & y_clip & z_clip]
+
+        self.vol_data[ind[:, 0], ind[:, 1], ind[:, 2]] += values
+
+    def _sim_2p_imaging(self, s=4, NF_size=91, NF_factor=0.0005, plateau_factor=1 / 2.,
+                        poisson_factor=20.):
+        """
+        Filter data to simulate real fluorescence imaging
+
+        Args:
+            s: Magnification kernel size for points
+        """
+        tmp = np.copy(self.vol_data)
+
+        # 3d convolution as separated 2d convolutions
+        kernel_xy = np.ones((s, s), dtype=np.float32)
+        kernel_z = np.ones((1, s), dtype=np.float32)
+
+        NF = np.ones_like(tmp)  # background fluorescence
+
+        for i in range(self.vol_data.shape[2]):  # along z-axis
+            img = tmp[:, :, i]
+            tmp[:, :, i] = cv2.filter2D(img, -1, kernel_xy)
+            NF[:, :, i] = cv2.GaussianBlur(tmp[:, :, i], (121, 121), sigmaX=NF_size)
+
+        for i in range(self.vol_data.shape[0]):  # along x-axis (could also be y)
+            img = tmp[i, :, :]
+            tmp[i, :, :] = cv2.filter2D(img, -1, kernel_z)
+            NF[i, :, :] = cv2.GaussianBlur(NF[i, :, :], (121, 121), sigmaX=NF_size)
+
+        tmp = tmp / np.percentile(tmp.flatten(), 99)
+        tmp = tmp + NF * NF_factor + np.percentile(tmp.flatten(), 99) * plateau_factor
+        tmp = np.random.poisson(tmp * poisson_factor)
+        tmp[tmp < 0] = 0
+
+        self.vol_data = tmp
+
+    @staticmethod
+    def _scale_variance_randomly(data, var_range=[0.6, 1.0]):
+
+        new_var = np.random.uniform(low=var_range[0], high=var_range[1])
+
+        data_ = np.log(data + 1e-7)
+        mu = data_.mean()
+        data_ = (data_ - mu) * new_var
+        data_ = data_ + mu
+        data_ = np.exp(data_)
+
+        return data_
+
+
