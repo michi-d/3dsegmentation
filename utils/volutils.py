@@ -193,7 +193,7 @@ def unique_vectors(vectors, tol=1e-6):
         equal = np.nonzero(distances[i, :] < tol)[0]
         equal = equal[equal > i]
         remove_indices += list(equal)
-    remove_indices = np.array(remove_indices)
+    remove_indices = np.array(remove_indices).astype(np.int)
     clean_vectors = np.delete(vectors, remove_indices, axis=0)
     return clean_vectors, remove_indices
 
