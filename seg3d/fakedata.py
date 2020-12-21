@@ -411,13 +411,19 @@ class RandomVolume():
     def __init__(self, L_xy=256, L_z=256,
                  relative_diameter=0.70, relative_depth=3 * 0.75,
                  type_ratios=[2, 3, 3, 3], var_range=[0.7, 1.0],
-                 random_geometry=False, vol_dtype='float32', verbose=1, **kwargs):
+                 cube_kernel_size=4, NF_size=91, simplify_factor=1.,
+                 random_geometry=False, vol_dtype='float32',
+                 seed=None, verbose=1, **kwargs):
         """
         Generates FakeData3D object
 
 
         **kwargs: additional arguments are for the geometry generator
         """
+        if seed:
+            np.random.seed(seed)
+        else:
+            np.random.seed()
 
         # generate underlying geometry
         if random_geometry:
@@ -433,10 +439,13 @@ class RandomVolume():
         self.relative_depth = relative_depth
         self.L_xy = L_xy
         self.L_z = L_z
+        self.cube_kernel_size = cube_kernel_size
+        self.NF_size = NF_size
         self.vol_dtype = vol_dtype
         self.type_ratios = type_ratios
         self.var_range = var_range
         self.verbose = verbose
+        self.simplify_factor = simplify_factor
 
         self._gen_space()
         self._gen_ground_truth()
@@ -460,7 +469,7 @@ class RandomVolume():
         self._generate_knobs(
             self.mid_points[ind_A], self.geometry.e_r[ind_A], self.geometry.e_theta[ind_A], self.geometry.e_phi[ind_A],
             n_points=10, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.2, v_std=1.0, std_radial=0.12, std_axial=0.10 * 2,
+            std_intensity=1.2, v_std=1.0, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=3, mode='A'
         )
 
@@ -469,7 +478,7 @@ class RandomVolume():
         self._generate_knobs(
             self.mid_points[ind_B], self.geometry.e_r[ind_B], self.geometry.e_theta[ind_B], self.geometry.e_phi[ind_B],
             n_points=2, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.0, v_std=1.0, std_radial=0.12, std_axial=0.10 * 2,
+            std_intensity=1.0, v_std=1.0, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=4, mode='B'
         )
         if self.verbose:
@@ -477,7 +486,7 @@ class RandomVolume():
         self._generate_knobs(
             self.mid_points[ind_C], self.geometry.e_r[ind_C], self.geometry.e_theta[ind_C], self.geometry.e_phi[ind_C],
             n_points=75, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.0, v_std=1.0, std_radial=0.06, std_axial=0.10 * 2,
+            std_intensity=1.0, v_std=1.0, std_radial=0.06/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=2, mode='C', ring_radius=0.3, ring_std=0.1
         )
 
@@ -487,7 +496,7 @@ class RandomVolume():
 
         if self.verbose:
             print("Applying filters...")
-        self._sim_2p_imaging()
+        self._sim_2p_imaging(s=self.cube_kernel_size, NF_size=self.NF_size)
 
         # scale variance of distribution randomly
         self.vol_data = self._scale_variance_randomly(self.vol_data, var_range=self.var_range)
@@ -746,7 +755,7 @@ class RandomVolume():
 
         # add position noise
         curves = np.repeat(curves, 4, axis=0)
-        values = np.repeat(values, 4, axis=0)
+        values = np.repeat(values, 4, axis=0)*intensity_factor
 
         noise = np.random.normal(loc=0, scale=self.mean_spacing * position_noise, size=curves.shape)
         curves = curves + noise
