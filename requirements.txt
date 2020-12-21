@@ -6,3 +6,5 @@ opencv-python==4.4.0.46
 matplotlib==3.3.3
 scikit-image==0.17.2
 h5py==3.1.0
+opencv-python==4.4.0.46
+ipyvolume==0.5.2

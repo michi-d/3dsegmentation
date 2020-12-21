@@ -2,6 +2,7 @@ import ipyvolume as ipv
 import time
 import numpy as np
 from ipywidgets import Layout, Box, VBox, HBox, HTML, Image
+import matplotlib.pyplot as plt
 
 
 def get_perspective(fig=None):
@@ -269,3 +270,42 @@ def show_movies(name=''):
     vb.children = [hb]
     
     return vb
+
+def visualize_volumes_for_slider(idx=0, axis=2, vminmax=None, alphaflag=False, **volumes):
+    """PLot images in one row."""
+    n = len(volumes)
+    fig = plt.figure(figsize=(len(volumes)*7, 5))
+    images = dict()
+    for i, (name, item) in enumerate(volumes.items()):
+
+        alpha = 1
+        if not alphaflag:
+            plt.subplot(1, n, i + 1)
+            alpha = 1
+        else:
+            if i > 0:
+                alpha = 0.2
+
+        plt.xticks([])
+        plt.yticks([])
+        plt.title(' '.join(name.split('_')))
+
+        volume_ = np.squeeze(item)
+        slice_object = [slice(None), slice(None), slice(None)]
+        slice_object[axis] = idx
+
+        if volume_.dtype == np.bool:
+            cmap = plt.get_cmap('Greys_r')
+        else:
+            cmap = plt.get_cmap('viridis')
+
+        if vminmax:
+            im = plt.imshow(volume_[slice_object], vmin=vminmax[0], vmax=vminmax[1],
+                            alpha=alpha, cmap=cmap)
+        else:
+            im = plt.imshow(volume_[slice_object], alpha=alpha, cmap=cmap)
+        images[name] = im
+
+        plt.colorbar()
+
+    return fig, images
