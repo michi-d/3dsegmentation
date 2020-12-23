@@ -4,6 +4,7 @@ __author__ = ['Michael Drews']
 import numpy as np
 from torch.utils.data import Dataset
 from torch import Tensor
+import torch
 import sys
 import tqdm
 import h5py
@@ -16,7 +17,8 @@ import traceback
 
 
 def _percentile_normalization(image_data, percentiles=(1,99)):
-    """Normalize pixel values within a given percentile range
+    """Normalize pixel values within a given percentile range.
+    Works for torch.Tensors
 
     Args:
         image_data: input image data
@@ -28,9 +30,8 @@ def _percentile_normalization(image_data, percentiles=(1,99)):
     low = np.percentile(image_data.flatten(), percentiles[0])
     high = np.percentile(image_data.flatten(), percentiles[1])
 
-
     image_data = (image_data-low) / (high-low)
-    return np.clip(image_data, 0, 1)
+    return torch.clip(image_data, 0, 1)
 
 
 class HDF5Dataset(Dataset):
@@ -340,6 +341,33 @@ class Fake3DDataset(HDF5Dataset):
 
             idx += 1
 
+    def get_preprocessed(self, i):
+        # send the request
+        data = self._get_samples(i)
+
+        # reformat data from chunks to output format
+        vol_data = np.concatenate([chunk['vol_data'] for chunk in data]).astype(np.float32)
+        vol_labels = np.concatenate([chunk['vol_labels'] for chunk in data]).astype(np.float32)
+
+        # get sub-volumes
+        f = lambda image, label: volutils.get_sub_volume(image, label,
+                                                         orig_x=vol_data.shape[1], orig_y=vol_data.shape[2],
+                                                         orig_z=vol_data.shape[3],
+                                                         output_x=64, output_y=64, output_z=64,
+                                                         background_threshold=0.95
+                                                         )
+        vol_data, vol_labels = f(vol_data.squeeze(), vol_labels.squeeze())
+
+        print(f'A: {i}')
+        print(vol_data.shape)
+        if i == 1:
+            vol_data = None
+
+        if vol_data is None:
+            # if no subvolume can be found try the next sample (a bit hacky)
+            print('No sub-volume found, try different sample...')
+            vol_data, vol_labels = self.__getitem__((i + 1) % self.__len__())
+
     def __getitem__(self, i):
         """
         Interface function for retrieving samples from the dataset.
@@ -348,8 +376,30 @@ class Fake3DDataset(HDF5Dataset):
         data = self._get_samples(i)
 
         # reformat data from chunks to output format
-        vol_data = np.concatenate([chunk['vol_data'] for chunk in data])
-        vol_labels = np.concatenate([chunk['vol_labels'] for chunk in data])
+        vol_data = np.concatenate([chunk['vol_data'] for chunk in data]).astype(np.float32)
+        vol_labels = np.concatenate([chunk['vol_labels'] for chunk in data]).astype(np.float32)
+
+        # get sub-volumes
+        f = lambda image, label: volutils.get_sub_volume(image, label,
+            orig_x=vol_data.shape[1], orig_y=vol_data.shape[2], orig_z=vol_data.shape[3],
+            output_x=64, output_y=64, output_z=64, background_threshold=0.95
+        )
+        vol_data, vol_labels = f(vol_data, vol_labels)
+
+        if vol_data is None:
+            # if no subvolume can be found try the next sample (a bit hacky)
+            print('No sub-volume found, try different sample...')
+            vol_data, vol_labels = self.__getitem__((i+1) % self.__len__())
+
+        # careful: data should be a torch.Tensor from this point on
+
+        # cast to Tensor
+        vol_data = Tensor(vol_data)
+        vol_labels = Tensor(vol_labels)
+
+        # normalize to 0..1
+        vol_data = _percentile_normalization(vol_data)
+        vol_labels = _percentile_normalization(vol_labels)
 
         return vol_data, vol_labels
 
