@@ -8,12 +8,9 @@ import sys
 import tqdm
 import h5py
 import os
-import time
 
 import seg3d.fakedata as fakedata
 import utils.volutils as volutils
-import utils.misc as misc
-from pathlib import Path
 
 import traceback
 
@@ -43,7 +40,7 @@ class HDF5Dataset(Dataset):
 
     """
 
-    def __init__(self, h5_files=None, chunk_size=64, mem_chunks=4, verbose=False, **kwargs):
+    def __init__(self, h5_files=[], chunk_size=64, mem_chunks=4, verbose=False, **kwargs):
         super().__init__(**kwargs)
 
         if type(h5_files) is str:
@@ -244,8 +241,115 @@ class HDF5Dataset(Dataset):
         # send the request
         data = self._get_samples(i)
 
+        return data
+
+
+class Fake3DDataset(HDF5Dataset):
+
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+
+    @classmethod
+    def generate_to_file(cls, filename, L, size, random_state=None, **kwargs):
+        """
+        Generates a new dataset from scratch using the fakedata.RandomVolume class.
+        """
+        assert size[0] == size[1], "Only z-axis can have different number of samples."
+
+        cls._create_h5(filename, L, size)
+
+        dummy_dataset = cls(h5_files=[filename])
+        dummy_dataset._gen_all(filename, random_state=random_state, L_xy=size[0], L_z=size[2], **kwargs)
+
+    @staticmethod
+    def _create_h5(filename, L, size, dtype='float16'):
+        """
+        Pre-allocates empty HDF5 file for self-generated volume data.
+
+        Args:
+            filename: target path
+            L: length of the dataset
+            size: shape of the volume
+            dtype: precision format
+        """
+
+        if os.path.isfile(filename):
+            raise FileExistsError(f'{filename} already exists.')
+
+        with h5py.File(filename, 'a') as hf:
+            hf.create_dataset("vol_data", (L, *size), dtype=dtype, data=np.zeros((L, *size), dtype=np.dtype(dtype)))
+            hf.create_dataset("vol_labels", (L, *size), dtype=dtype, data=np.zeros((L, *size), dtype=np.dtype(dtype)))
+
+            hf.create_dataset("points", (L,), dtype=h5py.vlen_dtype(np.dtype(dtype)), maxshape=(None,))
+            hf.create_dataset("e_r", (L,), dtype=h5py.vlen_dtype(np.dtype(dtype)), maxshape=(None,))
+            hf.create_dataset("e_theta", (L,), dtype=h5py.vlen_dtype(np.dtype(dtype)), maxshape=(None,))
+            hf.create_dataset("e_phi", (L,), dtype=h5py.vlen_dtype(np.dtype(dtype)), maxshape=(None,))
+
+    @staticmethod
+    def _save_sample_to_h5(filename, idx, vol_data, vol_labels, points, e_r, e_theta, e_phi):
+        """
+        Saves one sample to an HDF5 file.
+        Args:
+            i: index
+            path: target path
+        """
+        with h5py.File(filename, 'a') as hf:
+            hf['vol_data'][idx] = vol_data
+            hf['vol_labels'][idx] = vol_labels
+            hf['points'][idx] = points.flatten()
+            hf['e_r'][idx] = e_r.flatten()
+            hf['e_theta'][idx] = e_theta.flatten()
+            hf['e_phi'][idx] = e_phi.flatten()
+
+    @staticmethod
+    def _gen_sample(**kwargs):
+        """
+        Generates one random sample.
+        """
+        volume = None
+        while volume is None:
+            try:
+                volume = fakedata.RandomVolume(random_geometry=True, **kwargs)
+            except Exception as err:
+                print('Some error occurred while rendering the volume:')
+                traceback.print_tb(err.__traceback__)
+                print('Try again...')
+
+        return volume.vol_data, volume.vol_labels, volume.mid_points, \
+               volume.geometry.e_r, volume.geometry.e_theta, volume.geometry.e_phi
+
+    def _gen_all(self, filename, random_state=None, **kwargs):
+        """
+        Generates the whole dataset and saves it to HDF5.
+        """
+        print('Pre-rendering dataset...')
+        if random_state:
+            np.random.seed(random_state)
+        else:
+            np.random.seed()
+
+        idx = 0
+        print(f'selflength:{len(self)}')
+        for _ in tqdm.tqdm(range(len(self)), desc='Progress', file=sys.stdout):
+            # renders one volume
+            vol_data, vol_labels, points, e_r, e_theta, e_phi = self._gen_sample(**kwargs)
+
+            # save to HDF5
+            self._save_sample_to_h5(filename, idx, vol_data, vol_labels, points, e_r, e_theta, e_phi)
+
+            idx += 1
+
+    def __getitem__(self, i):
+        """
+        Interface function for retrieving samples from the dataset.
+        """
+        # send the request
+        data = self._get_samples(i)
+
         # reformat data from chunks to output format
         vol_data = np.concatenate([chunk['vol_data'] for chunk in data])
         vol_labels = np.concatenate([chunk['vol_labels'] for chunk in data])
 
         return vol_data, vol_labels
+
