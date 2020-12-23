@@ -23,11 +23,11 @@ class Logger(object):
         self.fpath = Path(fpath)
         self.parent_directory = self.fpath#.parent
         if not self.parent_directory.exists():
-            self.parent_directory.mkdir()
+            self.parent_directory.mkdir(parents=True)
 
         self.checkpoint_path_dir = self.parent_directory / 'checkpoints'
         if not self.checkpoint_path_dir.exists():
-            self.checkpoint_path_dir.mkdir()
+            self.checkpoint_path_dir.mkdir(parents=True)
 
         self.pythonfile_path_dir = self.parent_directory / 'pythonfile'
         if not self.pythonfile_path_dir.exists():
