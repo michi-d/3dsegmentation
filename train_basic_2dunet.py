@@ -5,16 +5,15 @@ import sys
 
 from pathlib import Path
 import utils
-
+from utils.data import SegmentationFake2DDataset
 from utils.misc import Hyperparameters
 from torch.utils.data import DataLoader
 from torch import nn
 import torch
 import numpy as np
 
-from seg3d.unet import Unet
-from seg3d.data import Fake3DDataset
-#from seg2d.stackedhourglass import StackedUnet
+from seg2d.unet import Unet
+from seg2d.stackedhourglass import StackedUnet
 from utils.misc import count_trainable_parameters
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -27,6 +26,14 @@ def parse_args():
     parser.add_argument("--log_path", type=str, default='./test')
     parser.add_argument("--checkpoint_policy", type=str, default='best')
 
+    parser.add_argument("--L_train", type=int, default='128')
+    parser.add_argument("--L_validate", type=int, default='32')
+    parser.add_argument("--L_test", type=int, default='32')
+
+    parser.add_argument("--train_file", type=str, default='./train_dataset.h5')
+    parser.add_argument("--validation_file", type=str, default='./validation_dataset.h5')
+    parser.add_argument("--test_file", type=str, default='./test_dataset.h5')
+
     parser.add_argument("--batch_size", type=int, default=32)
 
     parser.add_argument("--arch", type=str, default='unet')
@@ -36,7 +43,6 @@ def parse_args():
 
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument("--loss_type", type=str, default='dice')
-    parser.add_argument("--weight_decay", type=float, default=0.0)
 
     parser.add_argument("--start_lr", type=float, default=1e-3)
     parser.add_argument("--lr_scheduler_factor", type=float, default=0.20)
@@ -67,44 +73,35 @@ def main():
         sys.exit()    
 
     # get data
-    train_files = ['vol_data/vol_train_set1.h5',
-                   'vol_data/vol_train_set2.h5',
-                   'vol_data/vol_train_set3.h5',
-                   'vol_data/vol_train_set4.h5']
-    val_files = ['vol_data/vol_val_set.h5']
-    train_dataset = Fake3DDataset(h5_files=train_files)
-    validation_dataset = Fake3DDataset(h5_files=val_files)
+    train_dataset = SegmentationFake2DDataset(L=hparams.L_train, seed=111, h5path=hparams.train_file)
+    validation_dataset = SegmentationFake2DDataset(L=hparams.L_validate, seed=999, h5path=hparams.validation_file)
+    test_dataset = SegmentationFake2DDataset(L=hparams.L_test, seed=2222, h5path=hparams.test_file)
 
     train_loader = DataLoader(train_dataset, batch_size=hparams.batch_size)
     valid_loader = DataLoader(validation_dataset, batch_size=1)
+    test_loader = DataLoader(test_dataset, batch_size=1)
 
     # build model
     if hparams.arch == 'unet':
         model = Unet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1)
     elif hparams.arch == 'stacked_unet':
-        print('Not yet implemented.')
-        #model = StackedUnet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1,
-        #                    num_stacks=hparams.num_stacks)
+        model = StackedUnet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1,
+                            num_stacks=hparams.num_stacks)
     trainable_parameters = count_trainable_parameters(model)
     print(f'Trainable parameters: {trainable_parameters}')
-    if trainable_parameters > 5e6:
+    if trainable_parameters > 10e6:
         print(f'Number of parameters too high, aborting execution ....')
         sys.exit()
 
-    # set loss function
+    	# set loss function
     if hparams.loss_type == 'dice':
         loss = utils.losses.DiceLoss(activation='sigmoid')
     elif hparams.loss_type == 'bce':
         loss = torch.nn.BCEWithLogitsLoss()
     elif hparams.loss_type == 'weighted_bce':
-        # get fraction of positive labels from train set
-        n_pos = 0
-        for i in range(100):
-            vol_data, vol_labels = train_dataset[i]
-            n_pos += (vol_labels == 1).sum()
-        frac_pos = n_pos / vol_labels.numel() / 100
-        print(f'Fraction of positive labels: {frac_pos:.2f}')
-        loss = torch.nn.BCEWithLogitsLoss(pos_weight=(1-frac_pos)/frac_pos)
+        n_pos = (np.stack(train_dataset.masks[:1000], 0) == 1).sum()
+        n_neg = (np.stack(train_dataset.masks[:1000], 0) == 0).sum()
+        loss = torch.nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([n_neg / n_pos]))
 
     # set metrics
     metrics = [
@@ -115,11 +112,11 @@ def main():
     # set optimizer
     if hparams.optimizer == 'adam':
         optimizer = torch.optim.Adam([
-            dict(params=model.parameters(), lr=hparams.start_lr, weight_decay=hparams.weight_decay),
+            dict(params=model.parameters(), lr=hparams.start_lr),
         ])
     elif hparams.optimizer == 'rmsprop':
         optimizer = torch.optim.RMSprop([
-            dict(params=model.parameters(), lr=hparams.start_lr, weight_decay=hparams.weight_decay),
+            dict(params=model.parameters(), lr=hparams.start_lr),
         ])
 
     # set scheduler
