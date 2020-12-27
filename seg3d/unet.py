@@ -10,7 +10,7 @@ class Unet(nn.Module):
     My UNet implementation
     """
 
-    def __init__(self, depth=5, input_channels=1, start_channels=64, batchnorm=True):
+    def __init__(self, depth=5, input_channels=1, start_channels=64, conv_kernel_size=3, batchnorm=True):
         """
         Creates the network.
 
@@ -24,6 +24,7 @@ class Unet(nn.Module):
         self.start_channels = start_channels
         self.batchnorm = batchnorm
         self.input_channels = input_channels
+        self.conv_kernel_size = conv_kernel_size
 
         # generate network
         self._make_layers()
@@ -39,7 +40,7 @@ class Unet(nn.Module):
                 ch_in = self.start_channels * (2 ** (n - 1))
             ch_out = self.start_channels * (2 ** n)
 
-            self.down_path.append(self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm))
+            self.down_path.append(self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size))
 
         # create maxpool operation
         self.maxpool = nn.MaxPool3d(kernel_size=2, stride=2)
@@ -55,7 +56,7 @@ class Unet(nn.Module):
             ch_in = self.start_channels * (2 ** n)
 
             trans = nn.ConvTranspose3d(ch_in, ch_out, kernel_size=2, stride=2)
-            conv = self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm)
+            conv = self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size)
             self.up_path_trans.append(trans)
             self.up_path_conv.append(conv)
 
@@ -63,26 +64,27 @@ class Unet(nn.Module):
         self.out = nn.Conv3d(ch_in, 1, kernel_size=1)
 
     @staticmethod
-    def _dual_conv(in_channel, out_channel, batchnorm=True):
+    def _dual_conv(in_channel, out_channel, batchnorm=True, conv_kernel_size=3):
         """
         Returns a dual convolutional layer with ReLU activations in between.
         """
+        padding = conv_kernel_size // 2
         if batchnorm:
             conv = nn.Sequential(
-                nn.Conv3d(in_channel, out_channel, kernel_size=3, padding=1),
+                nn.Conv3d(in_channel, out_channel, kernel_size=conv_kernel_size, padding=padding),
                 nn.ReLU(inplace=True),
                 nn.BatchNorm3d(out_channel),
 
-                nn.Conv3d(out_channel, out_channel, kernel_size=3, padding=1),
+                nn.Conv3d(out_channel, out_channel, kernel_size=conv_kernel_size, padding=padding),
                 nn.ReLU(inplace=True),
                 nn.BatchNorm3d(out_channel)
             )
         else:
             conv = nn.Sequential(
-                nn.Conv3d(in_channel, out_channel, kernel_size=3, padding=1),
+                nn.Conv3d(in_channel, out_channel, kernel_size=conv_kernel_size, padding=padding),
                 nn.ReLU(inplace=True),
 
-                nn.Conv3d(out_channel, out_channel, kernel_size=3, padding=1),
+                nn.Conv3d(out_channel, out_channel, kernel_size=conv_kernel_size, padding=padding),
                 nn.ReLU(inplace=True),
             )
         return conv

@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument("--depth", type=int, default=4)
     parser.add_argument("--start_channels", type=int, default=4)
     parser.add_argument("--num_stacks", type=int, default=1)
+    parser.add_argument("--conv_kernel_size", type=int, default=3)
 
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument("--loss_type", type=str, default='dice')
@@ -87,11 +88,11 @@ def main():
 
     # build model
     if hparams.arch == 'unet':
-        model = Unet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1)
+        model = Unet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1, conv_kernel_size=hparams.conv_kernel_size)
     elif hparams.arch == 'stacked_unet':
-        print('Not yet implemented.')
+        #print('Not yet implemented.')
         model = StackedUnet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1,
-                            num_stacks=hparams.num_stacks)
+                            num_stacks=hparams.num_stacks, conv_kernel_size=hparams.conv_kernel_size)
     trainable_parameters = count_trainable_parameters(model)
     print(f'Trainable parameters: {trainable_parameters}')
     if (trainable_parameters >= hparams.MAX_PARAMS) or (trainable_parameters <= hparams.MIN_PARAMS):

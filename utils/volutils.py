@@ -4,6 +4,7 @@ __author__ = ['Michael Drews']
 import numpy as np
 import math
 from scipy.linalg import norm
+import torch
 
 
 def cart2spherical(xyz):
@@ -201,9 +202,10 @@ def unique_vectors(vectors, tol=1e-6):
 def get_sub_volume(image, label,
                    orig_x=128, orig_y=128, orig_z=128,
                    output_x=64, output_y=64, output_z=64,
-                   max_tries=1000, background_threshold=0.95):
+                   max_tries=1000, background_threshold=0.95,
+                   start_xyz=None):
     """
-    Extract random sub-volume from original images.
+    Extract (random) sub-volumes from original images.
 
     Args:
         image (np.array): original image,
@@ -221,6 +223,7 @@ def get_sub_volume(image, label,
         max_tries (int): maximum trials to do when sampling
         background_threshold (float): limit on the fraction
             of the sample which can be the background
+        start_xyz (tuple): start point if not random
 
     returns:
         X (np.array): sample of original image of dimension
@@ -231,6 +234,14 @@ def get_sub_volume(image, label,
     # Initialize features and labels with `None`
     X = None
     y = None
+
+    if start_xyz: # if start position is given (not random)
+        start_x = start_xyz[0]
+        start_y = start_xyz[1]
+        start_z = start_xyz[2]
+        y = label[:, start_x: start_x + output_x, start_y: start_y + output_y, start_z: start_z + output_z]
+        X = np.copy(image[:, start_x: start_x + output_x, start_y: start_y + output_y, start_z: start_z + output_z])
+        return X, y
 
     tries = 0
     while tries < max_tries:
@@ -272,4 +283,96 @@ def get_sub_volume(image, label,
     return None, None
 
 
+def as_vol_tensor(vol_data):
+    """
+    Casts input array to a float-precision torch Tensor with shape (1,Nx,Ny,Nz)
+    """
+    if (vol_data.ndim == 4) and (vol_data.shape[0] == 1):
+        # if first dimension is singleton dimension with "channels"
+        vol_data = torch.Tensor(vol_data).float()
+        return vol_data
+    elif (vol_data.ndim == 3):
+        vol_data = torch.Tensor(vol_data).float().unsqueeze(0)
+        return vol_data
 
+
+def percentile_normalization(image_data, percentiles=(1,99)):
+    """Normalize pixel values within a given percentile range.
+    Works for torch.Tensors
+
+    Args:
+        image_data: input image data
+        percentiles: tuple defining the percentiles
+
+    Returns:
+        clipped image data
+    """
+    low = np.percentile(image_data.flatten(), percentiles[0])
+    high = np.percentile(image_data.flatten(), percentiles[1])
+
+    image_data = (image_data-low) / (high-low)
+    return torch.clip(image_data, 0, 1)
+
+
+def predict_whole_volume(model, vol_data, sub_x=64, sub_y=64, sub_z=64, stride=64, normalize=False):
+    """
+    Predict on all sub-volumes within a larger volume using the model.
+
+    Args:
+        model: Segmentation model
+        vol_data: (1, Nx, Ny, Nz) array containing the volume data
+        sub_x: size of sub-volume in x
+        sub_y: size of sub-volume in y
+        sub_z: size of sub-volume in z
+        stride: stride for the sliding 3D window
+        normalize: Whether to normalize the data or not.
+
+    Returns:
+        vol_pred: Predicted segmentation labels for vol_data.
+    """
+    # re-format data
+    vol_data = as_vol_tensor(vol_data)
+
+    if normalize:
+        vol_data = percentile_normalization(torch.Tensor(vol_data))
+
+    # sliding volume loop
+    all_pred = []
+    for x in range(0, vol_data.shape[1] - sub_x + 1, stride):
+        for y in range(0, vol_data.shape[2] - sub_y + 1, stride):
+            for z in range(0, vol_data.shape[3] - sub_z + 1, stride):
+                start_xyz = (x, y, z)
+
+                # pre-allocate volume with (-1)
+                prediction = np.ones_like(vol_data) * (-1)
+
+                # get sub-volume
+                subvol_X, _ = \
+                    get_sub_volume(vol_data, np.ones_like(vol_data),
+                                   orig_x=vol_data.shape[1], orig_y=vol_data.shape[2],
+                                   orig_z=vol_data.shape[3],
+                                   output_x=sub_x, output_y=sub_y, output_z=sub_y, background_threshold=100.0,
+                                   start_xyz=start_xyz
+                                   )
+
+                # run model on sub-volume
+                with torch.no_grad():
+                    subvol_y_pred = model.forward(torch.Tensor(subvol_X).unsqueeze(0))
+                    subvol_y_pred = torch.sigmoid(subvol_y_pred)
+                    subvol_y_pred = subvol_y_pred.squeeze().cpu().numpy()
+
+                # save prediction
+                prediction[0, x:x + sub_x, y:y + sub_y, z:z + sub_z] = subvol_y_pred
+                all_pred.append(prediction)
+
+    all_pred = np.stack(all_pred, 0)
+
+    # merge sub-predictions
+    # count how often one voxel was classified as 0
+    neg_votes = ((0 < all_pred) & (all_pred <= 0.5)).sum(axis=0)
+    # count how often one voxel was classified as 1
+    pos_votes = ((0 < all_pred) & (all_pred > 0.5)).sum(axis=0)
+    # take the majority vote, in favor of 0 in case of a tie
+    vol_pred = ((neg_votes < pos_votes)).astype(np.int)
+
+    return vol_pred

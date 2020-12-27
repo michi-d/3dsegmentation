@@ -27,11 +27,7 @@ def _percentile_normalization(image_data, percentiles=(1,99)):
     Returns:
         clipped image data
     """
-    low = np.percentile(image_data.flatten(), percentiles[0])
-    high = np.percentile(image_data.flatten(), percentiles[1])
-
-    image_data = (image_data-low) / (high-low)
-    return torch.clip(image_data, 0, 1)
+    return volutils.percentile_normalization(image_data, percentiles=percentiles)
 
 
 class HDF5Dataset(Dataset):
@@ -41,7 +37,8 @@ class HDF5Dataset(Dataset):
 
     """
 
-    def __init__(self, h5_files=[], chunk_size=64, mem_chunks=4, verbose=False, **kwargs):
+    def __init__(self, h5_files=[], chunk_size=64, mem_chunks=4, verbose=False,
+                 sub_x=64, sub_y=64, sub_z=64, **kwargs):
         super().__init__(**kwargs)
 
         if type(h5_files) is str:
@@ -58,6 +55,9 @@ class HDF5Dataset(Dataset):
         self._get_files_info()
 
         self.verbose = verbose
+        self.sub_x = sub_x
+        self.sub_y = sub_y
+        self.sub_z = sub_z
 
     def _get_files_info(self):
         """
@@ -382,7 +382,8 @@ class Fake3DDataset(HDF5Dataset):
         # get sub-volumes
         f = lambda image, label: volutils.get_sub_volume(image, label,
             orig_x=vol_data.shape[1], orig_y=vol_data.shape[2], orig_z=vol_data.shape[3],
-            output_x=64, output_y=64, output_z=64, background_threshold=0.95
+            output_x=self.sub_x, output_y=self.sub_y, output_z=self.sub_z,
+            background_threshold=0.95
         )
         vol_data, vol_labels = f(vol_data, vol_labels)
 
