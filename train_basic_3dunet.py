@@ -58,7 +58,8 @@ def main():
     args = parse_args()
     hparams = Hyperparameters(**vars(args))
     hparams.add_params(DEVICE=DEVICE.type)
-    
+    print(f'BATCH SIZE: {hparams.batch_size}')
+  
     # check if already exists
     script = os.path.abspath(__file__)
     log_path = Path(hparams.log_path) / hparams.experiment_title
@@ -72,6 +73,7 @@ def main():
                    'vol_data/vol_train_set3.h5',
                    'vol_data/vol_train_set4.h5']
     val_files = ['vol_data/vol_val_set.h5']
+
     train_dataset = Fake3DDataset(h5_files=train_files)
     validation_dataset = Fake3DDataset(h5_files=val_files)
 
@@ -87,7 +89,7 @@ def main():
         #                    num_stacks=hparams.num_stacks)
     trainable_parameters = count_trainable_parameters(model)
     print(f'Trainable parameters: {trainable_parameters}')
-    if trainable_parameters > 5e6:
+    if (trainable_parameters > 30e6) or (trainable_parameters < 5e6):
         print(f'Number of parameters too high, aborting execution ....')
         sys.exit()
 
@@ -156,6 +158,8 @@ def main():
     )
 
     # train model
+    min_val_loss = np.inf
+    epochs_no_improve = 0
     for i in range(0, hparams.epochs):
         print('\nEpoch: {}'.format(i))
 
@@ -171,6 +175,16 @@ def main():
                          train_total_error=train_logs['total_error'],
                          valid_total_error=valid_logs['total_error'],
                          lr=optimizer.param_groups[0]['lr'])
+
+        # early stopping (quick implementation)
+        if valid_logs['loss'] < min_val_loss:
+            min_val_loss = valid_logs['loss']
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve +=1
+        if epochs_no_improve >= 15:
+            print('Early Stopping!')
+            break
 
 
 if __name__ == '__main__':

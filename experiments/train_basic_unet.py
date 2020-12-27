@@ -2,8 +2,8 @@
 import argparse
 import os
 import sys
-from pathlib import Path
 
+from pathlib import Path
 import utils
 from utils.data import SegmentationFake2DDataset
 from utils.misc import Hyperparameters

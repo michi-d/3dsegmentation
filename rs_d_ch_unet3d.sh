@@ -15,17 +15,18 @@ module load cudnn/10.1v7.6.5
 # activate python environment
 source ~/3dsegmentation/segmentation_env/bin/activate
 
-log_path="$HOME/3dsegmentation/logs_unet3d"
+log_path="$HOME/3dsegmentation/logs_test"
 
 #iterations=$SLURM_ARRAY_TASK_ID
-iterations=100
+#iterations=100
+iterations=1
 
 epochs=100
 counter=1
 while [ $counter -le $iterations ]
 do
    # choose hyperparameters
-   depth=$((1 + $RANDOM % 10))
+   depth=$((1 + $RANDOM % 7))
    channels=$((2**($RANDOM % 9)))
    
    if [ $(($RANDOM % 2)) -eq 0 ]; then
@@ -33,6 +34,10 @@ do
    else
       weight_decay=1e-2
    fi
+
+   depth=3
+   channels=64
+   weight_decay=1e-2
 
    # set folder name according to hyperparameters
    experiment_title="unet_d${depth}_ch${channels}_wd${weight_decay}"
@@ -44,7 +49,7 @@ do
    else
       echo "Starting experiment: ${experiment_title}"
       python train_basic_3dunet.py --experiment_title $experiment_title \
-             --log_path $log_path \
+             --log_path $log_path --batch_size 2 \
              --weight_decay $weight_decay \
              --epochs $epochs --depth $depth --start_channels $channels
              
