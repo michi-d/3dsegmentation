@@ -71,6 +71,7 @@ class Logger(object):
         self.data['eval_score_name'] = self.eval_score_name
         self.data['eval_mode'] = self.eval_mode
         self.data['checkpoint_policy'] = self.checkpoint_policy
+        self.set_exit_message()
 
     def _load_data_(self):
         """
@@ -184,6 +185,9 @@ class Logger(object):
             #now = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
             #name = f'{name}_{now}'
             shutil.copy(self.script, (self.pythonfile_path_dir / name).with_suffix('.py'))
+
+    def set_exit_message(self, msg=''):
+        self.data['exit_message'] = msg
 
 
 

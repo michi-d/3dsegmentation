@@ -11,10 +11,11 @@ from torch.utils.data import DataLoader
 from torch import nn
 import torch
 import numpy as np
+import traceback
 
 from seg3d.unet import Unet
 from seg3d.data import Fake3DDataset
-#from seg2d.stackedhourglass import StackedUnet
+from seg3d.stackedhourglass import StackedUnet
 from utils.misc import count_trainable_parameters
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -43,6 +44,10 @@ def parse_args():
     parser.add_argument("--lr_scheduler_patience", type=int, default=3)
 
     parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--early_stopping_patience", type=int, default=15)
+
+    parser.add_argument("--MAX_PARAMS", type=int, default=30e6)
+    parser.add_argument("--MIN_PARAMS", type=int, default=0e6)
 
     args = parser.parse_args()
     return args
@@ -85,12 +90,12 @@ def main():
         model = Unet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1)
     elif hparams.arch == 'stacked_unet':
         print('Not yet implemented.')
-        #model = StackedUnet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1,
-        #                    num_stacks=hparams.num_stacks)
+        model = StackedUnet(depth=hparams.depth, start_channels=hparams.start_channels, input_channels=1,
+                            num_stacks=hparams.num_stacks)
     trainable_parameters = count_trainable_parameters(model)
     print(f'Trainable parameters: {trainable_parameters}')
-    if (trainable_parameters > 30e6) or (trainable_parameters < 5e6):
-        print(f'Number of parameters too high, aborting execution ....')
+    if (trainable_parameters >= hparams.MAX_PARAMS) or (trainable_parameters <= hparams.MIN_PARAMS):
+        print(f'Number of parameters too high or too low, aborting execution ....')
         sys.exit()
 
     # set loss function
@@ -163,28 +168,40 @@ def main():
     for i in range(0, hparams.epochs):
         print('\nEpoch: {}'.format(i))
 
-        train_logs = train_epoch.run(train_loader)
-        valid_logs = valid_epoch.run(valid_loader)
+        try:
+            train_logs = train_epoch.run(train_loader)
+            valid_logs = valid_epoch.run(valid_loader)
 
-        lr_scheduler.step(valid_logs['loss'])
+            lr_scheduler.step(valid_logs['loss'])
 
-        logger.log_epoch(train_loss=train_logs['loss'],
-                         valid_loss=valid_logs['loss'],
-                         train_iou=train_logs['iou_score'],
-                         valid_iou=valid_logs['iou_score'],
-                         train_total_error=train_logs['total_error'],
-                         valid_total_error=valid_logs['total_error'],
-                         lr=optimizer.param_groups[0]['lr'])
+            logger.log_epoch(train_loss=train_logs['loss'],
+                             valid_loss=valid_logs['loss'],
+                             train_iou=train_logs['iou_score'],
+                             valid_iou=valid_logs['iou_score'],
+                             train_total_error=train_logs['total_error'],
+                             valid_total_error=valid_logs['total_error'],
+                             lr=optimizer.param_groups[0]['lr'])
 
-        # early stopping (quick implementation)
-        if valid_logs['loss'] < min_val_loss:
-            min_val_loss = valid_logs['loss']
-            epochs_no_improve = 0
-        else:
-            epochs_no_improve +=1
-        if epochs_no_improve >= 15:
-            print('Early Stopping!')
+            # early stopping
+            if valid_logs['loss'] < min_val_loss:
+                min_val_loss = valid_logs['loss']
+                epochs_no_improve = 0
+            else:
+                epochs_no_improve +=1
+            if epochs_no_improve >= hparams.early_stopping_patience:
+                print('Early Stopping!')
+                logger.set_exit_message('Early stopping')
+                logger._save_logs()
+                break
+
+        except Exception as err: # save any error message
+            print('Some error occurred during training:')
+            traceback.print_tb(err.__traceback__)
+            msg = traceback.format_exc()
+            logger.set_exit_message(msg)
+            logger._save_logs()
             break
+
 
 
 if __name__ == '__main__':
