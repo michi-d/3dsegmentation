@@ -31,7 +31,7 @@ The following animation visualizes one training sample as an image stack as we m
 
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="500"/>
 
-The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right):
+The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right), with simulated fluorescence data in blue and segmentations masks in red:
 <p float="left">
   &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="200"/>
