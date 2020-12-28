@@ -27,17 +27,14 @@ To generate a full training set of 2048 samples and a validation set of 64 sampl
 
 The data is then saved in HDF5-format in the folder `vol_data`.
 
-To customize dataset size run:
+The following animation visualizes one training sample as an image stack as we move along the z-axis:
 
-`python gen_data.py --filename FILENAME --directory DIRECTORY --L SIZE --random_state SEED`
-
-where `DIRECTORY` defines the parent directory, `SIZE` the number of samples and `SEED` the random generator seed.
-
-The following animation visualizes the image stack as we go along the z-axis:
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="500"/>
-The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right).
-<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="250"/>
-<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="250"/>
+
+The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right):
+
+<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="200"/>
+<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="200"/>
 
 ### 2D
 
@@ -46,7 +43,7 @@ The following two animations show the above image stack visualized in 3D (left) 
 `from utils.data import SegmentationFake2DDataset` \
 `train_dataset = SegmentationFake2DDataset(L=SIZE, seed=SEED, h5path=FILE_PATH)`
 
-If `FILE_PATH` is set to `None` the dataset will not be saved to disk.
+where `SEED` the the seed for the random number generator and `SIZE` the number of samples. If `FILE_PATH` is set to `None` the dataset will not be saved to disk.
 
 
 
