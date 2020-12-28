@@ -1,6 +1,6 @@
 # 3dsegmentation
 
-A toolkit for 3D segmentation of anatomical data from the fly brain. This repository comprises a module for generation of artifical neuro-imaging data with  annotated ground truth labels, as well as a pipeline for training deep learning models (U-Net, Stacked Hourglass Network) on the 3D segmentation task. 
+A toolkit for 3D segmentation of anatomical data from the fly brain. This repository contains a module for generation of artificial neuroimaging data with annotated ground truth labels, as well as a pipeline for training different deep learning models (U-Net, Stacked Hourglass Network) on the 3D segmentation task, implemented in PyTorch.
 
 ## Installation
 
@@ -10,7 +10,18 @@ To get the code running, please set up a python virtual environment and install 
 `source bin/activate/segmentation_env` \
 `pip install -r requirements.txt`
 
-## Data generation
+## Training
+
+Currently, there are two model architectures implemented:
+
+* **U-net**: The original U-Net architecture (with one input channel) (https://arxiv.org/abs/1505.04597).
+* **Stacked Hourglass**: A stacked version of U-Net with intermediate supervision, according to the Stacked Hourglass Network (https://arxiv.org/abs/1603.06937).
+
+To train one model, first generate the training dataset (see below), and then run the following command:
+
+`python train_basic_3dunet.py --arch ARCHITECTURE`
+
+## Artificial Data Generation
 
 This respository contains functions for generating both 3D and 2D data, for test purposes.
 In the 3D case, data generation is based on a 3D model of the fly optic lobe with visual columns distributed hexagonally over a randomly positioned and scaled cut-out of an ellipsoid 3D surface. Neurites are approximated as Bezier curves of third grade from each column to the center of the ellipsoid. 
@@ -19,13 +30,13 @@ After establishing a basic and random geometry for each sample, the artifical im
 
 Binary ground truth segmentation masks are generated as 3D elongated cones around the central axis for each column. The orientation, curvature and position are randomized for each sample.
 
-### 3D-data
+### 3D-Data
 
 To generate a full training set of 2048 samples and a validation set of 64 samples please run 
 
 `./gen_data.sh`
 
-The data is then saved in HDF5-format in the folder `vol_data`.
+The data is then saved into five different HDF5-files in the folder **./vol_data**.
 
 The following animation visualizes one training sample as an image stack as we move along the z-axis:
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="500"/>
@@ -36,7 +47,7 @@ The following two animations show the above image stack visualized in 3D (left) 
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="200"/>
 </p>
 
-### 2D-data
+### 2D-Data
 
 2D test data can be generated online by generating a `SegmentationFake2DDataset` object in Python-code as follows:
 
