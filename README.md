@@ -81,7 +81,7 @@ The following options are available:
 ` --lr_scheduler_factor FLOAT`: Multiplicative factor for the learning rate scheduler \
 ` --lr_scheduler_patience INT`: Number of epochs to wait before decreasing the learning rate 
 
-` --MAX_PARAMS INT`: Training will not start if paramater count of the model exceeds this limit. \
-` --MIN_PARAMS INT`: Training will not start if paramater count of the model is below this limit. 
+` --MAX_PARAMS INT`: Training will not start if parameter count of the model exceeds this limit. \
+` --MIN_PARAMS INT`: Training will not start if parameter count of the model is below this limit. 
 
-Standard values for these parameters can be found in the script `train_basic_3dunet.py`
+Standard values for these parameters can be found in the script `train_basic_3dunet.py`.
