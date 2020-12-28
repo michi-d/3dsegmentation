@@ -48,6 +48,8 @@ where `SEED` the the seed for the random number generator and `SIZE` the number 
 
 ## Training
 
+### 3D Segmentation
+
 Currently, there are two model architectures implemented:
 
 * **U-net**: The original U-Net architecture (with one input channel) (https://arxiv.org/abs/1505.04597).
@@ -59,23 +61,23 @@ To train a model, first generate a training and validation dataset in the folder
 
 The following options are available:
 
-` --experiment_title STR`: name for the experiment \
-` --log_path STR`: parent directory for the log files \
-` --checkpoint_policy (last/best/all)`: which checkpoints to save during training 
+` --experiment_title STR`: Name for the experiment \
+` --log_path STR`: Parent directory for the log files \
+` --checkpoint_policy (last/best/all)`: Which checkpoints to save during training 
 
 ` --batch_size INT`: Batch size \
 ` --epochs INT`: Maximum number of epochs to train \
 ` --early_stopping_patience INT`: Training will stop if validation loss does not decrease after this number of epochs. 
 
 ` --arch (unet/stacked_unet)`: Model architecture (U-Net / Stacked Hourglass Network based on U-Net) \
-` --depth INT`: number of layers in each half of the U-Net \
-` --start_channels INT`: number of filters in first layer \
-` --num_stacks INT`: number of U-Nets to stack for the Stacked Hourglass Network \
-` --conv_kernel_size INT`: kernel size of the 3D convolutional layers in the network 
+` --depth INT`: Number of layers in each half of the U-Net \
+` --start_channels INT`: Number of filters in first layer \
+` --num_stacks INT`: Number of U-Nets to stack for the Stacked Hourglass Network \
+` --conv_kernel_size INT`: Kernel size of the 3D convolutional layers in the network 
 
 ` --optimizer (adam/rmsprop)`: Optimizer algorithm \
-` --loss_type (dice/bce/weighted_bce)`: Loss function (Dice loss / Binary Cross-Entropy / Weighted Binary Cross-Entropy) \
-` --weight_decay FLOAT`: weight decay parameter for the optimizer 
+` --loss_type (dice/bce/weighted_bce)`: Loss function (Dice loss / Binary cross-entropy / Label-balanced binary cross-entropy) \
+` --weight_decay FLOAT`: Weight decay parameter for the optimizer 
 
 ` --start_lr FLOAT`: Learning rate at the beginning of training \
 ` --lr_scheduler_factor FLOAT`: Multiplicative factor for the learning rate scheduler \
@@ -85,3 +87,7 @@ The following options are available:
 ` --MIN_PARAMS INT`: Training will not start if parameter count of the model is below this limit. 
 
 Standard values for these parameters can be found in the script `train_basic_3dunet.py`.
+
+### 2D Segmentation
+
+Similar to above, 2D models can be trained using the script `train_basic_2dunet.py` with options examinable at the top of file.
