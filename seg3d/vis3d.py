@@ -35,7 +35,7 @@ def set_perspective(view=(0,0,0), rotation=(0,0,0, 'XYZ'), perspective=None):
     
     # set camera position and angle
     if perspective is None:
-        return 
+        pass
     elif perspective == 'oblique':
         # oblique view
         view = (-133.60365788878377, 54.701906702426264, 2.4643234833362575)
@@ -78,7 +78,7 @@ def my_volshow_1channel(volume, view=(0,0,0), rotation=(0,0,0, 'XYZ'), perspecti
     
     
 def my_volshow_2channel(volume, view=(0,0,0), rotation=(0,0,0, 'XYZ'), perspective=None, 
-                        plot_params=None):
+                        plot_params=None, fig_width=400, fig_height=500):
     """Customized volume show function, with specified camera position and angle.
     
     Args:
@@ -94,7 +94,7 @@ def my_volshow_2channel(volume, view=(0,0,0), rotation=(0,0,0, 'XYZ'), perspecti
         plot_params = [{}]*n_channels
     assert len(plot_params) == n_channels 
        
-    ipv.pylab.figure()
+    ipv.pylab.figure(width=fig_width, height=fig_height)
     for ch in range(n_channels):
         ipv.volshow(volume[ch, :], **plot_params[ch])
     ipv.show()

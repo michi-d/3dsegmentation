@@ -375,6 +375,24 @@ class Fake3DDataset(HDF5Dataset):
             print('No sub-volume found, try different sample...')
             vol_data, vol_labels = self.__getitem__((i + 1) % self.__len__())
 
+    def get_volumes(self, i):
+        """
+        Outputs the whole volume given an index or slice object:
+
+        Args:
+            i: index or slice object
+
+        Returns:
+            vol_data, vol_labels: data and labels for the requested samples
+        """
+        # send the request
+        data = self._get_samples(i)
+
+        # reformat data from chunks to output format
+        vol_data = np.concatenate([chunk['vol_data'] for chunk in data]).astype(np.float32)
+        vol_labels = np.concatenate([chunk['vol_labels'] for chunk in data]).astype(np.float32)
+        return vol_data, vol_labels
+
     def __getitem__(self, i):
         """
         Interface function for retrieving samples from the dataset.
