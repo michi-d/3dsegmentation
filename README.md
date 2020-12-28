@@ -28,11 +28,9 @@ To generate a full training set of 2048 samples and a validation set of 64 sampl
 The data is then saved in HDF5-format in the folder `vol_data`.
 
 The following animation visualizes one training sample as an image stack as we move along the z-axis:
-
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="500"/>
 
 The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right):
-
 <p float="left">
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="200"/>
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="200"/>
