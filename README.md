@@ -6,9 +6,11 @@ A toolkit for 3D segmentation of anatomical data from the fly brain. This reposi
 
 To get the code running, please set up a python virtual environment and install all dependencies as follows:
 
-`virtualenv segmentation_env` \
-`source bin/activate/segmentation_env` \
-`pip install -r requirements.txt`
+```
+virtualenv segmentation_env
+source bin/activate/segmentation_env
+pip install -r requirements.txt
+```
 
 ## Artificial Data Generation
 
@@ -43,8 +45,10 @@ The following two animations show the above image stack visualized in 3D (left) 
 
 2D data can be generated on-the-fly by creating a `SegmentationFake2DDataset` object in Python-code as follows:
 
-`from utils.data import SegmentationFake2DDataset` \
-`train_dataset = SegmentationFake2DDataset(L=SIZE, seed=SEED, h5path=FILE_PATH)`
+```
+from utils.data import SegmentationFake2DDataset
+train_dataset = SegmentationFake2DDataset(L=SIZE, seed=SEED, h5path=FILE_PATH)
+```
 
 where `SEED` the the seed for the random number generator and `SIZE` the number of samples. If `FILE_PATH` is set to `None` the dataset will not be saved to disk.
 
