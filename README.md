@@ -6,8 +6,8 @@ A toolkit for 3D segmentation of anatomical data from the fly brain. This reposi
 
 To get the code running, please set up a python virtual environment and install all dependencies as follows:
 
-`virtualenv segmentation_env`
-`source bin/activate/segmentation_env`
+`virtualenv segmentation_env` \
+`source bin/activate/segmentation_env` \
 `pip install -r requirements.txt`
 
 ## Data generation
@@ -34,19 +34,16 @@ To customize dataset size run:
 where `DIRECTORY` defines the parent directory, `SIZE` the number of samples and `SEED` the random generator seed.
 
 The following animation visualizes the image stack as we go along the z-axis:
-
-<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="600"/>
-
+<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/slice_demo_3.gif" alt="drawing" width="500"/>
 The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right).
-
-<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="600"/>
-<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="600"/>
+<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="250"/>
+<img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="250"/>
 
 ### 2D
 
 2D test data can be generated online by generating a `SegmentationFake2DDataset` object in Python-code as follows:
 
-`from utils.data import SegmentationFake2DDataset`
+`from utils.data import SegmentationFake2DDataset` \
 `train_dataset = SegmentationFake2DDataset(L=SIZE, seed=SEED, h5path=FILE_PATH)`
 
 If `FILE_PATH` is set to `None` the dataset will not be saved to disk.
