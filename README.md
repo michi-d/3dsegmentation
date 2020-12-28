@@ -23,7 +23,7 @@ Binary ground truth segmentation masks are generated as 3D elongated cones aroun
 
 ### 3D-Data
 
-To generate a training set of 2048 samples and a validation set of 64 samples please run:
+To generate a training set of 2048 samples and a validation set of 64 samples please run the data generator script:
 
 `./gen_data.sh`
 
@@ -45,7 +45,7 @@ The following two animations show the above image stack visualized in 3D (left) 
 
 2D data can be generated on-the-fly by creating a `SegmentationFake2DDataset` object in Python-code as follows:
 
-```
+```python
 from utils.data import SegmentationFake2DDataset
 train_dataset = SegmentationFake2DDataset(L=SIZE, seed=SEED, h5path=FILE_PATH)
 ```
