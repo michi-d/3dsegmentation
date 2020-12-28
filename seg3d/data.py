@@ -9,6 +9,7 @@ import sys
 import tqdm
 import h5py
 import os
+from pathlib import Path
 
 import seg3d.fakedata as fakedata
 import utils.volutils as volutils
@@ -170,7 +171,7 @@ class HDF5Dataset(Dataset):
         """
         key_list = list(self.data_cache.keys())
         for k in key_list:
-            del self.data_cache[key]
+            del self.data_cache[k]
         self.last_requests = []
 
     def _pull_data(self, fi_ci, ind):
@@ -278,6 +279,12 @@ class Fake3DDataset(HDF5Dataset):
         if os.path.isfile(filename):
             raise FileExistsError(f'{filename} already exists.')
 
+        # create parent directory if it does not exist
+        parent_directory = Path(filename).parent
+        if not parent_directory.exists():
+            parent_directory.mkdir(parents=True)
+
+        # pre-allocate empty HDF5 file
         with h5py.File(filename, 'a') as hf:
             hf.create_dataset("vol_data", (L, *size), dtype=dtype, data=np.zeros((L, *size), dtype=np.dtype(dtype)))
             hf.create_dataset("vol_labels", (L, *size), dtype=dtype, data=np.zeros((L, *size), dtype=np.dtype(dtype)))
