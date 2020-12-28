@@ -60,7 +60,7 @@ where `SEED` the the seed for the random number generator and `SIZE` the number 
 Currently, there are two model architectures implemented:
 
 * **U-net**: The original U-Net architecture (with one input channel) (https://arxiv.org/abs/1505.04597).
-* **Stacked Hourglass Network**: A stacked version of U-Net with intermediate supervision and intermediate layers implemented according to the original paper of this architecture (https://arxiv.org/abs/1603.06937).
+* **Stacked Hourglass Network**: A stack of several U-Net's with intermediate supervision and intermediate layers implemented according to the original paper of this architecture (https://arxiv.org/abs/1603.06937).
 
 To train a model, first generate a training and validation dataset in the folder **./vol_data** (see above), and then run the command
 
