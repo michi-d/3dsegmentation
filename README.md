@@ -13,13 +13,13 @@ To get the code running, please set up a python virtual environment and install 
 ## Data generation
 
 This respository contains functions for generating both 3D and 2D data, for test purposes.
-In the 3D case, data generation is based on a 3D model of the fly optic lobe with visual columns distributed hexagonally over a randomly positioned and scaled cut-out of an ellipsoid 3D surface. Neurites are approximated as Bezier curves of 3rd grade from each column to the center of the ellipsoid. 
+In the 3D case, data generation is based on a 3D model of the fly optic lobe with visual columns distributed hexagonally over a randomly positioned and scaled cut-out of an ellipsoid 3D surface. Neurites are approximated as Bezier curves of third grade from each column to the center of the ellipsoid. 
 
 After establishing a basic and random geometry for each sample, the artifical imaging volume is rendered by distributing "fluorescence clusters" randomly as a function of the distance of the center for each column. To induce more variance, three different types of probability densities can govern the distribution for each column. Randomly, columns are also left out from rendering to simulate stochastic underexpression of fluorescence markers in the biological substrate.
 
 Binary ground truth segmentation masks are generated as 3D elongated cones around the central axis for each column. The orientation, curvature and position are randomized for each sample.
 
-### 3D 
+### 3D-data
 
 To generate a full training set of 2048 samples and a validation set of 64 samples please run 
 
@@ -33,10 +33,12 @@ The following animation visualizes one training sample as an image stack as we m
 
 The following two animations show the above image stack visualized in 3D (left) and another sample from the training set (right):
 
+<p float="left">
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_3.gif" alt="drawing" width="200"/>
 <img src="https://github.com/michi-d/3dsegmentation/blob/main/assets/3d_demo_20.gif" alt="drawing" width="200"/>
+</p>
 
-### 2D
+### 2D-data
 
 2D test data can be generated online by generating a `SegmentationFake2DDataset` object in Python-code as follows:
 
