@@ -46,7 +46,7 @@ The following two animations show the above image stack visualized in 3D (left) 
 where `SEED` the the seed for the random number generator and `SIZE` the number of samples. If `FILE_PATH` is set to `None` the dataset will not be saved to disk.
 
 
-## Training
+## Model Training
 
 ### 3D Segmentation
 
