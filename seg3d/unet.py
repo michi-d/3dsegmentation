@@ -10,7 +10,8 @@ class Unet(nn.Module):
     My UNet implementation
     """
 
-    def __init__(self, depth=5, input_channels=1, start_channels=64, conv_kernel_size=3, batchnorm=True):
+    def __init__(self, depth=5, input_channels=1, start_channels=64, conv_kernel_size=3,
+                 batchnorm=True, resblocks=False):
         """
         Creates the network.
 
@@ -25,6 +26,7 @@ class Unet(nn.Module):
         self.batchnorm = batchnorm
         self.input_channels = input_channels
         self.conv_kernel_size = conv_kernel_size
+        self.resblocks = bool(resblocks)
 
         # generate network
         self._make_layers()
@@ -40,7 +42,10 @@ class Unet(nn.Module):
                 ch_in = self.start_channels * (2 ** (n - 1))
             ch_out = self.start_channels * (2 ** n)
 
-            self.down_path.append(self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size))
+            conv_block = self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size)
+            if self.resblocks:
+                conv_block = ResidualBlock(ch_in, ch_out, conv_block, batchnorm=self.batchnorm)
+            self.down_path.append(conv_block)
 
         # create maxpool operation
         self.maxpool = nn.MaxPool3d(kernel_size=2, stride=2)
@@ -56,9 +61,11 @@ class Unet(nn.Module):
             ch_in = self.start_channels * (2 ** n)
 
             trans = nn.ConvTranspose3d(ch_in, ch_out, kernel_size=2, stride=2)
-            conv = self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size)
+            conv_block = self._dual_conv(ch_in, ch_out, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size)
+            if self.resblocks:
+                conv_block = ResidualBlock(ch_in, ch_out, conv_block, batchnorm=self.batchnorm)
             self.up_path_trans.append(trans)
-            self.up_path_conv.append(conv)
+            self.up_path_conv.append(conv_block)
 
             # create output layer
         self.out = nn.Conv3d(ch_in, 1, kernel_size=1)
@@ -90,8 +97,9 @@ class Unet(nn.Module):
         return conv
 
     def forward_unet(self, x):
-        """Forward pass through  down- and upsample path"""
-
+        """
+        Forward pass through  down- and upsample path WITHOUT output layer.
+        """
         # pass through downsample path
         self.feature_maps = []
         for n in range(self.depth):
@@ -112,7 +120,47 @@ class Unet(nn.Module):
         return x
 
     def forward(self, x):
+        """
+        Forward pass WITH output layer
+        """
         x = self.forward_unet(x)
         # pass through output layer
         x = self.out(x)
         return x
+
+
+class ResidualBlock(nn.Module):
+    """
+    Residual block around a given processing block
+    """
+
+    def __init__(self, in_channels, out_channels, block, batchnorm=True):
+
+        super().__init__()
+        self.batchnorm = batchnorm
+        self.in_channels, self.out_channels = in_channels, out_channels
+
+        # build processing block
+        self.block = block
+
+        # build final activation function
+        self.activate = nn.ReLU(inplace=True)
+
+        # build shortcut connection (with 1x1 kernel in case of channel mismatch)
+        self.shortcut = nn.Sequential(
+            nn.Conv3d(self.in_channels, self.out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm3d(self.out_channels)
+        ) if self.should_apply_shortcut else None
+
+    def forward(self, x):
+        residual = x
+        if self.should_apply_shortcut:
+            residual = self.shortcut(x)
+        x = self.block(x)
+        x += residual
+        x = self.activate(x)
+        return x
+
+    @property
+    def should_apply_shortcut(self):
+        return self.in_channels != self.out_channels

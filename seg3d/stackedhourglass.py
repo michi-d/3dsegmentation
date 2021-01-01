@@ -10,7 +10,8 @@ from .unet import Unet
 class StackedUnet(nn.Module):
     """Stacked Unet Network
     """
-    def __init__(self, num_stacks = 2, depth=5, start_channels=64, input_channels=1, conv_kernel_size=3, batchnorm=True):
+    def __init__(self, num_stacks = 2, depth=5, start_channels=64, input_channels=1, conv_kernel_size=3,
+                 batchnorm=True, resblocks=False):
 
         super().__init__()
         self.num_stacks = num_stacks
@@ -19,6 +20,7 @@ class StackedUnet(nn.Module):
         self.batchnorm = batchnorm
         self.input_channels = input_channels
         self.conv_kernel_size = conv_kernel_size
+        self.resblocks = bool(resblocks)
 
         self._make_layers()
 
@@ -33,7 +35,8 @@ class StackedUnet(nn.Module):
             else:
                 ch_in = self.start_channels
             unet = Unet(depth=self.depth, start_channels=self.start_channels,
-                        input_channels=ch_in, batchnorm=self.batchnorm, conv_kernel_size=self.conv_kernel_size)
+                        input_channels=ch_in, batchnorm=self.batchnorm, resblocks=self.resblocks,
+                        conv_kernel_size=self.conv_kernel_size)
             hg.append(unet)
         return hg
 
