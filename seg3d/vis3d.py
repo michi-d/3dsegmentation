@@ -1,7 +1,7 @@
 import ipyvolume as ipv
 import time
 import numpy as np
-from ipywidgets import Layout, Box, VBox, HBox, HTML, Image
+from ipywidgets import Layout, Box, VBox, HBox, HTML, Image, interact, IntSlider
 import matplotlib.pyplot as plt
 
 
@@ -309,3 +309,40 @@ def visualize_volumes_for_slider(idx=0, axis=2, vminmax=None, alphaflag=False, *
         plt.colorbar()
 
     return fig, images
+
+
+def slider_plot(plot_data, axis=2, alphaflag=True, figsize=(5,10), **kwargs):
+    """
+    Generates an interactive visualization of a 3D volume as an image stack with a slider
+    for the 3rd dimension.
+
+    Args:
+        plot_data: Dictionary with keys for titles and values for data
+        axis: Along which axis to stack
+        alphaflag: If True, shows second channels as an semi-transparent overlay
+        figsize: Figure size
+
+    Returns:
+        widget: Interactive IPython widget
+    """
+
+    # create figure
+    fig, images = visualize_volumes_for_slider(**plot_data, axis=axis, alphaflag=alphaflag, **kwargs);
+    fig.set_figheight(figsize[0])
+    fig.set_figwidth(figsize[1])
+
+    # create update function
+    def update_figure(i):
+        slice_object = [slice(None), slice(None), slice(None)]
+        slice_object[axis] = i
+        for name in images.keys():
+            im_data = plot_data[name][slice_object]
+            images[name].set_data(im_data)
+        fig.canvas.draw_idle()
+
+    # create widget
+    data_shape = list(plot_data.values())[0].shape
+    max_slider = data_shape[axis]-1
+    widget = interact(update_figure, i = IntSlider(min=0, max=max_slider, value=0, description='i'));
+
+    return widget

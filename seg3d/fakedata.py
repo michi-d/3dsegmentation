@@ -413,6 +413,7 @@ class RandomVolume():
                  type_ratios=[2, 3, 3, 3], var_range=[0.7, 1.0],
                  cube_kernel_size=4, NF_size=91, simplify_factor=1.,
                  random_geometry=False, vol_dtype='float32',
+                 baseline_intensity=50, std_intensity_range=(0.2,1.2), v_std=1.0,
                  seed=None, verbose=1, **kwargs):
         """
         Generates FakeData3D object
@@ -424,6 +425,7 @@ class RandomVolume():
             np.random.seed(seed)
         else:
             np.random.seed()
+        print(np.random.uniform(low=std_intensity_range[0], high=std_intensity_range[1]))
 
         # generate underlying geometry
         if random_geometry:
@@ -446,6 +448,10 @@ class RandomVolume():
         self.var_range = var_range
         self.verbose = verbose
         self.simplify_factor = simplify_factor
+        self.baseline_intensity = baseline_intensity
+        self.std_intensity_range = std_intensity_range
+        self.std_intensity = np.random.uniform(low=std_intensity_range[0], high=std_intensity_range[1])
+        self.v_std = v_std
 
         self._gen_space()
         self._gen_ground_truth()
@@ -468,8 +474,8 @@ class RandomVolume():
             print("Generating columns type A...")
         self._generate_knobs(
             self.mid_points[ind_A], self.geometry.e_r[ind_A], self.geometry.e_theta[ind_A], self.geometry.e_phi[ind_A],
-            n_points=10, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.2, v_std=1.0, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
+            n_points=10, n_points_final=250, baseline_intensity=self.baseline_intensity,
+            std_intensity=self.std_intensity*1.2, v_std=self.v_std, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=3, mode='A'
         )
 
@@ -477,22 +483,23 @@ class RandomVolume():
             print("Generating columns type B...")
         self._generate_knobs(
             self.mid_points[ind_B], self.geometry.e_r[ind_B], self.geometry.e_theta[ind_B], self.geometry.e_phi[ind_B],
-            n_points=2, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.0, v_std=1.0, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
+            n_points=2, n_points_final=250, baseline_intensity=self.baseline_intensity,
+            std_intensity=self.std_intensity, v_std=self.v_std, std_radial=0.12/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=4, mode='B'
         )
         if self.verbose:
             print("Generating columns type C...")
         self._generate_knobs(
             self.mid_points[ind_C], self.geometry.e_r[ind_C], self.geometry.e_theta[ind_C], self.geometry.e_phi[ind_C],
-            n_points=75, n_points_final=250, baseline_intensity=50,
-            std_intensity=1.0, v_std=1.0, std_radial=0.06/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
+            n_points=75, n_points_final=250, baseline_intensity=self.baseline_intensity,
+            std_intensity=self.std_intensity, v_std=self.v_std, std_radial=0.06/self.simplify_factor, std_axial=0.10 * 2/self.simplify_factor,
             n_iterations=2, mode='C', ring_radius=0.3, ring_std=0.1
         )
 
         if self.verbose:
             print("Generating neurites...")
-        self._generate_neurites()
+        self._generate_neurites(baseline_intensity=self.baseline_intensity, std_intensity=self.std_intensity,
+                                intensity_factor=2, frac_empty=0.3, position_noise=0.025)
 
         if self.verbose:
             print("Applying filters...")
@@ -770,8 +777,8 @@ class RandomVolume():
 
         self.vol_data[ind[:, 0], ind[:, 1], ind[:, 2]] += values
 
-    def _sim_2p_imaging(self, s=4, NF_size=91, NF_factor=0.0005, plateau_factor=1 / 2.,
-                        poisson_factor=20.):
+    def _sim_2p_imaging(self, s=4, NF_size=91, NF_factor=0.0005, plateau_factor=1 / 10.,
+                        poisson_factor=(10,30)):
         """
         Filter data to simulate real fluorescence imaging
 
@@ -798,13 +805,18 @@ class RandomVolume():
 
         tmp = tmp / np.percentile(tmp.flatten(), 99)
         tmp = tmp + NF * NF_factor + np.percentile(tmp.flatten(), 99) * plateau_factor
-        tmp = np.random.poisson(tmp * poisson_factor)
+
+        tmp[tmp < 0] = 0
+        p_factor = np.random.randint(*poisson_factor)
+        tmp = np.random.poisson(tmp * float(p_factor))
+
+        tmp = tmp.astype(np.float) + np.random.normal(loc=0, scale=np.log(tmp+1e-5).std() / 10.0, size=tmp.shape)
         tmp[tmp < 0] = 0
 
         self.vol_data = tmp
 
     @staticmethod
-    def _scale_variance_randomly(data, var_range=[0.6, 1.0]):
+    def _scale_variance_randomly(data, var_range=[0.4, 1.0]):
 
         new_var = np.random.uniform(low=var_range[0], high=var_range[1])
 

@@ -358,6 +358,8 @@ def predict_whole_volume(model, vol_data, sub_x=64, sub_y=64, sub_z=64, stride=6
                 # run model on sub-volume
                 with torch.no_grad():
                     subvol_y_pred = model.forward(torch.Tensor(subvol_X).unsqueeze(0))
+                    if type(subvol_y_pred) == list:
+                        subvol_y_pred = subvol_y_pred[-1]
                     subvol_y_pred = torch.sigmoid(subvol_y_pred)
                     subvol_y_pred = subvol_y_pred.squeeze().cpu().numpy()
 
