@@ -425,7 +425,6 @@ class RandomVolume():
             np.random.seed(seed)
         else:
             np.random.seed()
-        print(np.random.uniform(low=std_intensity_range[0], high=std_intensity_range[1]))
 
         # generate underlying geometry
         if random_geometry:
@@ -777,8 +776,8 @@ class RandomVolume():
 
         self.vol_data[ind[:, 0], ind[:, 1], ind[:, 2]] += values
 
-    def _sim_2p_imaging(self, s=4, NF_size=91, NF_factor=0.0005, plateau_factor=1 / 10.,
-                        poisson_factor=(10,30)):
+    def _sim_2p_imaging(self, s=4, NF_size=91, NF_factor_range=(0.0005, 0.0005*5),
+                        plateau_factor=1 / 10., poisson_factor=(10,30)):
         """
         Filter data to simulate real fluorescence imaging
 
@@ -804,6 +803,7 @@ class RandomVolume():
             NF[i, :, :] = cv2.GaussianBlur(NF[i, :, :], (121, 121), sigmaX=NF_size)
 
         tmp = tmp / np.percentile(tmp.flatten(), 99)
+        NF_factor = np.random.uniform(low=NF_factor_range[0], high=NF_factor_range[1])
         tmp = tmp + NF * NF_factor + np.percentile(tmp.flatten(), 99) * plateau_factor
 
         tmp[tmp < 0] = 0
