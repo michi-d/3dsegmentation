@@ -67,6 +67,7 @@ class WeightedDiceLoss(base.Loss):
             threshold=None,
             boundary_weight=self.boundary_weight,
             boundary_thickness=self.boundary_thickness,
+            device=self.dummy_param.device,
             ignore_channels=self.ignore_channels,
         )
 

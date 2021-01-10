@@ -30,6 +30,7 @@ class BaseObject(nn.Module):
     def __init__(self, name=None):
         super().__init__()
         self._name = name
+        self.dummy_param = nn.Parameter(torch.empty(0))
 
     @property
     def __name__(self):

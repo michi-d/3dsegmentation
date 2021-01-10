@@ -68,7 +68,7 @@ def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, ignore_channels=None):
 
 
 def weighted_dice_score(pr, gt, beta=1, eps=1e-7, boundary_weight=10, boundary_thickness=1,
-                        threshold=None, ignore_channels=None):
+                        device='cpu', threshold=None, ignore_channels=None):
     """Calculate weighted dice-score between ground truth and prediction
     Args:
         pr (torch.Tensor): predicted tensor
@@ -91,6 +91,7 @@ def weighted_dice_score(pr, gt, beta=1, eps=1e-7, boundary_weight=10, boundary_t
     # calculate loss independently for both types of pixels
     borders = volutils.easy_borders(gt, thickness=boundary_thickness)
     w = torch.Tensor(borders*(boundary_weight-1) + 1)
+    w = w.to(device)
 
     nominator = ((1 + beta ** 2) * torch.sum(tp*w) + eps)
     denominator = ((1 + beta ** 2) * torch.sum(tp*w) + beta ** 2 * torch.sum(fn*w) + torch.sum(fp*w) + eps)
