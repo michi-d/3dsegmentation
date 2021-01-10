@@ -5,7 +5,7 @@
 #SBATCH -o out.%x
 #SBATCH -e err.%x
 #SBATCH -G 1
-#SBATCH -J randomsearch
+#SBATCH -J search_numstacks
 #SBATCH -a 0-100%1
 
 module load cuda10.1/toolkit/10.1.105

@@ -4,8 +4,8 @@
 #SBATCH -t 2-00:00:00
 #SBATCH -o out.%x
 #SBATCH -e err.%x
-#SBATCH -G 1
-#SBATCH -J randomsearch
+#SBATCH -G gtx1080:1
+#SBATCH -J diagonalsearch
 #SBATCH -a 0-100%1
 
 module load cuda10.1/toolkit/10.1.105
@@ -33,6 +33,15 @@ channels22M=(16 32)
 
 depth=("${depth1M[@]}" "${depth5M[@]}" "${depth22M[@]}")
 channels=("${channels1M[@]}" "${channels5M[@]}" "${channels22M[@]}")
+
+#depth1M=(2 1)
+#channels1M=(64 128)
+#depth5M=(3 2 1)
+#channels5M=(64 128 256)
+#depth22M=(4 3 2 1)
+#channels22M=(64 128 256 512)
+#depth=("${depth22M[@]}" "${depth5M[@]}" "${depth1M[@]}")
+#channels=("${channels22M[@]}" "${channels5M[@]}" "${channels1M[@]}")
 
 d=$((depth[$SLURM_ARRAY_TASK_ID]))
 ch=$((channels[$SLURM_ARRAY_TASK_ID]))

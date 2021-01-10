@@ -362,7 +362,7 @@ class Fake3DDataset(HDF5Dataset):
                                                          orig_x=vol_data.shape[1], orig_y=vol_data.shape[2],
                                                          orig_z=vol_data.shape[3],
                                                          output_x=64, output_y=64, output_z=64,
-                                                         background_threshold=0.95
+                                                         background_threshold=self.background_threshold
                                                          )
         vol_data, vol_labels = f(vol_data.squeeze(), vol_labels.squeeze())
 
@@ -426,7 +426,6 @@ class Fake3DDataset(HDF5Dataset):
 
         # normalize to 0..1
         vol_data = _percentile_normalization(vol_data)
-        vol_labels = _percentile_normalization(vol_labels)
 
         return vol_data, vol_labels
 
