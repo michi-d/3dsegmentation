@@ -46,6 +46,31 @@ class DiceLoss(base.Loss):
         )
 
 
+class WeightedDiceLoss(base.Loss):
+
+    def __init__(self, eps=1., beta=1., activation=None, ignore_channels=None,
+                 boundary_weight=10.0, boundary_thickness=1, **kwargs):
+        super().__init__(**kwargs)
+        self.eps = eps
+        self.beta = beta
+        self.activation = Activation(activation)
+        self.boundary_weight = boundary_weight
+        self.boundary_thickness = boundary_thickness
+        self.ignore_channels = ignore_channels
+
+    def forward(self, y_pr, y_gt):
+        y_pr = self.activation(y_pr)
+        return 1 - F.weighted_dice_score(
+            y_pr, y_gt,
+            beta=self.beta,
+            eps=self.eps,
+            threshold=None,
+            boundary_weight=self.boundary_weight,
+            boundary_thickness=self.boundary_thickness,
+            ignore_channels=self.ignore_channels,
+        )
+
+
 class MinEuclideanLoss(base.Loss):
 
     def __init__(self, activation=None, ignore_channels=None, **kwargs):

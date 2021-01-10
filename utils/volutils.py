@@ -378,3 +378,64 @@ def predict_whole_volume(model, vol_data, sub_x=64, sub_y=64, sub_z=64, stride=6
     vol_pred = ((neg_votes < pos_votes)).astype(np.int)
 
     return vol_pred
+
+
+def roll_zeropad(A, shift, axis, pad_value=0):
+    """
+    Shift the elements of an array into one direction,
+    and pads empty elements on the other side.
+
+    Args:
+        A: Input array
+        shift: How many positions to shift.
+        axis: Along which axis to shift.
+        pad_value: Which value to insert on other side.
+
+    Returns:
+        Shifted array
+    """
+    if isinstance(A, np.ndarray):
+        roll = np.roll
+    elif isinstance(A, torch.Tensor):
+        roll = torch.roll
+
+    A = roll(A, shift, axis)
+    slicer = [slice(None)] * A.ndim
+    if shift >= 0:
+        slicer[axis] = slice(0, shift)
+    elif shift < 0:
+        slicer[axis] = slice(shift, None)
+    A[tuple(slicer)] = pad_value
+
+    return A
+
+
+def easy_borders(vol_labels, thickness=1, axes=(2, 3, 4)):
+    """
+    Finds border of segmentation masks by simple dilation and boolean operations.
+
+    Args:
+        vol_labels: Segmentation mask
+        thickness: How many pixels for the border.
+        axes: which axes are the spatial axes, normally: (2,3,4) (0: batch, 1: channel)
+
+    Returns:
+        Borders boolean array
+    """
+
+    if isinstance(vol_labels, np.ndarray):
+        labels = vol_labels.astype('bool')
+    elif isinstance(vol_labels, torch.Tensor):
+        labels = vol_labels.detach().cpu().numpy().astype('bool')
+
+    shift = int(thickness)
+
+    shift_x = roll_zeropad(labels, shift, axes[0]) | roll_zeropad(labels, -shift, axes[0])
+    shift_y = roll_zeropad(labels, shift, axes[1]) | roll_zeropad(labels, -shift, axes[1])
+    shift_z = roll_zeropad(labels, shift, axes[2]) | roll_zeropad(labels, -shift, axes[2])
+
+    dilated = shift_x | shift_y | shift_z
+    borders = dilated & (~labels)
+
+    return borders
+

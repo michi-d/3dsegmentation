@@ -40,6 +40,9 @@ def parse_args():
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument("--loss_type", type=str, default='dice')
     parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--boundary_weight", type=float, default=1.0)
+    parser.add_argument("--boundary_thickness", type=int, default=1)
+    parser.add_argument("--background_threshold", type=float, default=0.95)
 
     parser.add_argument("--start_lr", type=float, default=1e-3)
     parser.add_argument("--lr_scheduler_factor", type=float, default=0.20)
@@ -81,8 +84,8 @@ def main():
                    'vol_data/vol_train_set4.h5']
     val_files = ['vol_data/vol_val_set.h5']
 
-    train_dataset = Fake3DDataset(h5_files=train_files)
-    validation_dataset = Fake3DDataset(h5_files=val_files)
+    train_dataset = Fake3DDataset(h5_files=train_files, background_threshold=hparams.background_threshold)
+    validation_dataset = Fake3DDataset(h5_files=val_files, background_threshold=hparams.background_threshold)
 
     train_loader = DataLoader(train_dataset, batch_size=hparams.batch_size)
     valid_loader = DataLoader(validation_dataset, batch_size=1)
@@ -116,11 +119,17 @@ def main():
         frac_pos = n_pos / vol_labels.numel() / 100
         print(f'Fraction of positive labels: {frac_pos:.2f}')
         loss = torch.nn.BCEWithLogitsLoss(pos_weight=(1-frac_pos)/frac_pos)
+    elif hparams.loss_type == 'boundary_weighted_dice':
+        loss = utils.losses.WeightedDiceLoss(activation='sigmoid',
+                                             boundary_weight=hparams.boundary_weight,
+                                             boundary_thickness=hparams.boundary_thickness)
 
     # set metrics
     metrics = [
         utils.metrics.IoU(threshold=0.5, activation='sigmoid'),
-        utils.metrics.TotalError()
+        utils.metrics.TotalError(),
+        utils.metrics.FalseNegativeRate(),
+        utils.metrics.FalsePositiveRate()
     ]
 
     # set optimizer

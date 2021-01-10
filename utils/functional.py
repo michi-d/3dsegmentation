@@ -2,6 +2,7 @@
 __credits__ = ['Pavel Yakubovskiy, https://github.com/qubvel/segmentation_models.pytorch']
 
 import torch
+import utils.volutils as volutils
 
 def _take_channels(*xs, ignore_channels=None):
     if ignore_channels is None:
@@ -62,6 +63,38 @@ def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, ignore_channels=None):
 
     score = ((1 + beta ** 2) * tp + eps) \
             / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + eps)
+
+    return score
+
+
+def weighted_dice_score(pr, gt, beta=1, eps=1e-7, boundary_weight=10, boundary_thickness=1,
+                        threshold=None, ignore_channels=None):
+    """Calculate weighted dice-score between ground truth and prediction
+    Args:
+        pr (torch.Tensor): predicted tensor
+        gt (torch.Tensor):  ground truth tensor
+        beta (float): positive constant
+        eps (float): epsilon to avoid zero division
+        threshold: threshold for outputs binarization
+        weight: weight factor for border pixels
+    Returns:
+        float: F score
+    """
+
+    pr = _threshold(pr, threshold=threshold)
+    pr, gt = _take_channels(pr, gt, ignore_channels=ignore_channels)
+
+    tp = gt * pr
+    fp = pr - tp
+    fn = gt - tp
+
+    # calculate loss independently for both types of pixels
+    borders = volutils.easy_borders(gt, thickness=boundary_thickness)
+    w = torch.Tensor(borders*(boundary_weight-1) + 1)
+
+    nominator = ((1 + beta ** 2) * torch.sum(tp*w) + eps)
+    denominator = ((1 + beta ** 2) * torch.sum(tp*w) + beta ** 2 * torch.sum(fn*w) + torch.sum(fp*w) + eps)
+    score = nominator / denominator
 
     return score
 
@@ -192,5 +225,52 @@ def total_error(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
 
     n_pixels = pr.numel()
     score = (fn + fp) / n_pixels
+
+    return score
+
+
+def false_positive_rate(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
+    """Calculate precision score between ground truth and prediction
+    Args:
+        pr (torch.Tensor): predicted tensor
+        gt (torch.Tensor):  ground truth tensor
+        eps (float): epsilon to avoid zero division
+        threshold: threshold for outputs binarization
+    Returns:
+        float: precision score
+    """
+
+    pr = _threshold(pr, threshold=threshold)
+    pr, gt = _take_channels(pr, gt, ignore_channels=ignore_channels)
+
+    tp = torch.sum(gt * pr)
+    fp = torch.sum(pr) - tp
+    #fn = torch.sum(gt) - tp
+    n = torch.sum(1-gt)
+    tn = n - fp
+
+    score = fp / (fp + tn)
+
+    return score
+
+
+def false_negative_rate(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
+    """Calculate precision score between ground truth and prediction
+    Args:
+        pr (torch.Tensor): predicted tensor
+        gt (torch.Tensor):  ground truth tensor
+        eps (float): epsilon to avoid zero division
+        threshold: threshold for outputs binarization
+    Returns:
+        float: precision score
+    """
+
+    pr = _threshold(pr, threshold=threshold)
+    pr, gt = _take_channels(pr, gt, ignore_channels=ignore_channels)
+
+    tp = torch.sum(gt * pr)
+    fn = torch.sum(gt) - tp
+
+    score = fn / (fn + tp)
 
     return score
