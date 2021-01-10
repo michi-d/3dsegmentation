@@ -248,9 +248,10 @@ class HDF5Dataset(Dataset):
 
 class Fake3DDataset(HDF5Dataset):
 
-    def __init__(self, **kwargs):
+    def __init__(self, background_threshold=1.0, **kwargs):
 
         super().__init__(**kwargs)
+        self.background_threshold = background_threshold
 
     @classmethod
     def generate_to_file(cls, filename, L, size, random_state=None, **kwargs):
@@ -408,7 +409,7 @@ class Fake3DDataset(HDF5Dataset):
         f = lambda image, label: volutils.get_sub_volume(image, label,
             orig_x=vol_data.shape[1], orig_y=vol_data.shape[2], orig_z=vol_data.shape[3],
             output_x=self.sub_x, output_y=self.sub_y, output_z=self.sub_z,
-            background_threshold=0.95
+            background_threshold=self.background_threshold
         )
         vol_data, vol_labels = f(vol_data, vol_labels)
 

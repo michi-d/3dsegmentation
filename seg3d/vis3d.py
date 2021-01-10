@@ -296,6 +296,7 @@ def visualize_volumes_for_slider(idx=0, axis=2, vminmax=None, alphaflag=False, *
 
         if volume_.dtype == np.bool:
             cmap = plt.get_cmap('Greys_r')
+            vminmax = (0,1)
         else:
             cmap = plt.get_cmap('viridis')
 
